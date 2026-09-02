@@ -1,0 +1,94 @@
+[
+  {
+    "id": "user_demo_default",
+    "name": "Vanshik Lakkad",
+    "email": "vanshik@aeris.ai",
+    "role": "Citizen",
+    "passwordHash": "257fb0db7e722bf395ae917f783bca7128cf41c98ed04097c853cfedd9f4b411",
+    "salt": "b13b67e9fa9aa6efb6c761d5cbeb6b64",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T13:44:28.610Z",
+    "lastLogin": "2026-09-02T16:54:32.855Z"
+  },
+  {
+    "id": "user_1788366951178_83703bd7",
+    "name": "Dr. Elena Rostova",
+    "email": "researcher_1788366951174@aeris.ai",
+    "role": "Climate Researcher",
+    "passwordHash": "1ba814b09d9b95de8d7323b25e516cbc769fcbbf667eed6521a469aef5c83ea6",
+    "salt": "07de496724fb347f3a68ef52098454ce",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T16:35:51.178Z",
+    "lastLogin": "2026-09-02T16:35:51.178Z"
+  },
+  {
+    "id": "user_1788366969190_1cf4c1fa",
+    "name": "Test Reset User",
+    "email": "user_reset_1788366969156@aeris.ai",
+    "role": "Emergency Responder",
+    "passwordHash": "9c1d4790e50a45922ba04c612785bff496ea6c074c0fe5aed078bfddd5d8599e",
+    "salt": "91924d5b9bd1011d2e2f3730092469d5",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T16:36:09.190Z",
+    "lastLogin": "2026-09-02T16:36:09.190Z"
+  },
+  {
+    "id": "user_1788367395937_52106eb2",
+    "name": "LAKKAD VANSHIK",
+    "email": "lakkadvanshik@gmail.com",
+    "role": "Disaster Manager",
+    "passwordHash": "4e4a5a560d03dc0b1fadc0a6ea6a9eef7a92beeb407bd5e25e497d8cee7e7a1e",
+    "salt": "a6a7e1103ef4e5d69f4c9faed77be6b4",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T16:43:15.937Z",
+    "lastLogin": "2026-09-02T16:43:15.937Z"
+  },
+  {
+    "id": "user_1788368072936_d47b6ea6",
+    "name": "Dr. Elena Rostova",
+    "email": "researcher_1788368072875@aeris.ai",
+    "role": "Climate Researcher",
+    "passwordHash": "$2b$10$ym5EFg2.rBeHg0XLh4de7.8jZoDgpiDczqGDL7A5j/qyYmKNolpTm",
+    "salt": "d8ced0774b9538fa508d008172ccdfb2",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T16:54:32.936Z",
+    "lastLogin": "2026-09-02T16:54:32.936Z"
+  },
+  {
+    "id": "user_1788368082691_974105ff",
+    "name": "Test Reset User",
+    "email": "user_reset_1788368082591@aeris.ai",
+    "role": "Emergency Responder",
+    "passwordHash": "$2b$10$nh8x/nLJMfYmk7weyeSLUe74sexNgs1d10zKn7lEAD7hhJmc7YJqC",
+    "salt": "933465858bc2a00c168d7a8e0562ed35",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T16:54:42.691Z",
+    "lastLogin": "2026-09-02T16:54:42.691Z"
+  },
+  {
+    "id": "user_google_106620155019516084983",
+    "name": "lakkad Vanshik",
+    "email": "lakkadvanshik10@gmail.com",
+    "role": "Citizen",
+    "googleId": "106620155019516084983",
+    "picture": "https://lh3.googleusercontent.com/a/ACg8ocJZaX0a0-ybOJHFCtFJlTFnNOl68HHKgIJ7_fHOoXeMF1abI20=s96-c",
+    "passwordHash": "$2b$10$2eq5R8EPFRiRHKCf3ziWUeV4SpbHSpGKy3hiBcC9xylsCT2FTlw26",
+    "salt": "3395def1686bbd70855c16aad80a1aee",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T17:40:18.314Z",
+    "lastLogin": "2026-09-02T17:40:18.314Z"
+  },
+  {
+    "id": "user_google_109392550958792460808",
+    "name": "Vanshik Lakkad",
+    "email": "vanshiklakkad5@gmail.com",
+    "role": "Citizen",
+    "googleId": "109392550958792460808",
+    "picture": "https://lh3.googleusercontent.com/a/ACg8ocK299qq68RpRXz0ATMJ-1UjXPaaIy7wjqEYal-yNAHtMsFfjw=s96-c",
+    "passwordHash": "$2b$10$5W.kgc7rrjwW2yGO8SmCku8iXSrb1nZ008m9RuL6jB1Jbosh.qMAC",
+    "salt": "c79f1ddb257052ec16c2891b7ffdf28f",
+    "avatarColor": "from-emerald-500 to-teal-600",
+    "createdAt": "2026-09-02T17:40:40.267Z",
+    "lastLogin": "2026-09-02T17:40:40.267Z"
+  }
+]

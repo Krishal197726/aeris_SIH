@@ -1,0 +1,95 @@
+[
+  {
+    "id": "chat_1788371611647_wdbbs",
+    "title": "Ahmedabad Weather Intelligence: Deep moist...",
+    "messages": [
+      {
+        "id": "bot-1788371611646",
+        "sender": "aeris",
+        "text": "Ahmedabad Weather Intelligence: Deep moisture inflow from the Northeast Arabian Sea is driving convective cloud bands inland. Expected precipitation probability is 78% with moderate to heavy spells during late afternoon.",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Ahmedabad, Gujarat (23.02° N, 72.57° E)",
+          "tempRange": "24°C — 31°C",
+          "currentTemp": "29°C",
+          "rainProb": 78,
+          "windSpeed": "18 km/h WSW",
+          "humidity": "82%",
+          "riskLevel": "MODERATE TO HIGH",
+          "riskColor": "#f59e0b",
+          "personaAdvisory": {
+            "title": "CITIZEN MOBILITY ADVISORY",
+            "recommendation": "Rain is likely tomorrow evening in Ahmedabad after 4:00 PM. Peak intensity expected between 5:00 PM and 7:30 PM. Carry rain protection and consider scheduling outdoor commutes or market trips prior to late afternoon.",
+            "metrics": [
+              {
+                "label": "Precipitation Prob.",
+                "val": "78%"
+              },
+              {
+                "label": "Expected Window",
+                "val": "4 PM – 8 PM"
+              },
+              {
+                "label": "Rain Volume",
+                "val": "25 – 40 mm"
+              },
+              {
+                "label": "UV Index",
+                "val": "6 (Moderate)"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "78% Precipitation Probability",
+                "detail": "Ensemble agreement across ECMWF, GFS, and WRF 3km high-resolution runs confirms heavy convective moisture convergence."
+              },
+              {
+                "title": "Increasing Wind & Squall Dynamics",
+                "detail": "Surface winds accelerating from 14 km/h to gust peaks of 42 km/h during convective downdrafts."
+              },
+              {
+                "title": "Atmospheric Instability (CAPE > 2,400 J/kg)",
+                "detail": "High thermal lapse rates and Gulf of Khambhat moisture flux creating strong vertical thunderstorm updrafts."
+              },
+              {
+                "title": "Official Multi-Agency Cross-Check",
+                "detail": "IMD Doppler Radar Bhuj/Ahmedabad reflectivity > 45 dBZ verified against INSAT-3DR infrared sounders."
+              }
+            ],
+            "nwpModels": [
+              "IMD HRRR v4.2",
+              "GFS 0.25°",
+              "ECMWF IFS",
+              "WRF-AERIS Meso 3km"
+            ],
+            "synopticSource": "IMD Coastal Radar Network & AERIS Rapid Warning System",
+            "timestamp": "14:32 IST (Live Telemetry Sync)"
+          },
+          "source": "IMD • GFS • WRF • AERIS Ensemble v4.1",
+          "updated": "14:32 IST"
+        },
+        "timestamp": "11:23 pm"
+      }
+    ],
+    "userEmail": "vanshiklakkad5@gmail.com",
+    "createdAt": "2026-09-02T17:53:31.647Z",
+    "updatedAt": "2026-09-02T17:53:31.647Z"
+  },
+  {
+    "id": "chat_1788371609607_u8z8q",
+    "title": "tell me about ahmedabad",
+    "messages": [
+      {
+        "id": "usr-1788371609597",
+        "sender": "user",
+        "text": "tell me about ahmedabad",
+        "timestamp": "11:23 pm"
+      }
+    ],
+    "userEmail": "vanshiklakkad5@gmail.com",
+    "createdAt": "2026-09-02T17:53:29.606Z",
+    "updatedAt": "2026-09-02T17:53:29.606Z"
+  }
+]
