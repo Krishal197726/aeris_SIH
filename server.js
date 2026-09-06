@@ -8,6 +8,8 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import chatRouter from './server/routes/chat.js';
+import { isOpenRouterConfigured } from './server/config/openrouter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -709,6 +711,12 @@ app.delete('/api/chats/:id', (req, res) => {
 });
 
 /* =========================================================================
+ * 4.1 OPENROUTER AI ORCHESTRATION ROUTE (POST /api/chat)
+ * ========================================================================= */
+
+app.use('/api/chat', chatRouter);
+
+/* =========================================================================
  * 5. SYSTEM HEALTH & SESSION UTILITIES
  * ========================================================================= */
 
@@ -767,6 +775,10 @@ app.get('/api/health', (req, res) => {
       emailService: {
         configured: Boolean(mailTransporter),
         sender: getMailSender()
+      },
+      openRouter: {
+        configured: isOpenRouterConfigured(),
+        model: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-latest'
       }
     }
   });
@@ -806,5 +818,6 @@ app.listen(PORT, () => {
   console.log(`[AERIS UNIFIED SERVER] Google OAuth Client Secret Loaded: ${Boolean(clientSecret && clientSecret.length > 0)}`);
   console.log(`[AERIS UNIFIED SERVER] Google OAuth Redirect URI: ${redirectUri}`);
   console.log(`[AERIS UNIFIED SERVER] Email Service Configured: ${mailConfigured}`);
+  console.log(`[AERIS UNIFIED SERVER] OpenRouter AI Integration Configured: ${isOpenRouterConfigured()}`);
   console.log('====================================================');
 });
