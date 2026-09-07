@@ -752,28 +752,36 @@ app.get('/api/chats', authGuard, async (req, res) => {
       .order('updated_at', { ascending: false });
 
     if (error) {
-      console.error('[AERIS CHAT] GET /api/chats error:', error.message);
-      return res.status(500).json({ error: 'Failed to load chats.' });
+      console.error('[AERIS CHAT] GET /api/chats session query error:', error.message);
+      return res.status(500).json({ success: false, error: 'Failed to load chats.' });
     }
 
-    // For each session, fetch messages
+    // For each session, fetch messages using the actual chat_messages column names
     const chats = await Promise.all(
       (sessions || []).map(async (session) => {
-        const { data: messages } = await supabase
+        const { data: messages, error: msgError } = await supabase
           .from('chat_messages')
-          .select('id, role, content, created_at')
+          .select('id, sender, text, card_data, sources, created_at')
           .eq('session_id', session.id)
           .order('created_at', { ascending: true });
+
+        if (msgError) {
+          console.error('[AERIS CHAT] GET message query error for session', session.id, ':', msgError.message);
+        }
 
         return {
           id: session.id,
           title: session.title,
           createdAt: session.created_at,
           updatedAt: session.updated_at,
+          // Map DB columns → frontend-compatible message shape
+          // 'bot' in DB becomes 'aeris' for the frontend (ChatPage uses sender === 'aeris')
           messages: (messages || []).map((m) => ({
             id: m.id,
-            role: m.role,
-            text: m.content,
+            sender: m.sender === 'bot' ? 'aeris' : 'user',
+            text: m.text,
+            card: m.card_data ?? null,
+            sources: m.sources ?? null,
             timestamp: m.created_at
           }))
         };
@@ -783,7 +791,7 @@ app.get('/api/chats', authGuard, async (req, res) => {
     return res.json({ success: true, chats });
   } catch (err) {
     console.error('[AERIS CHAT] GET /api/chats exception:', err);
-    return res.status(500).json({ error: 'Unexpected error loading chats.' });
+    return res.status(500).json({ success: false, error: 'Unexpected error loading chats.' });
   }
 });
 
@@ -824,17 +832,36 @@ app.post('/api/chats', authGuard, async (req, res) => {
     if (messages.length > 0) {
       await supabase.from('chat_messages').delete().eq('session_id', id);
 
-      const rows = messages.map((m) => ({
-        session_id: id,
-        role: m.role || (m.sender === 'user' ? 'user' : 'assistant'),
-        content: m.text || m.content || '',
-        created_at: m.timestamp || m.created_at || now
-      }));
+      // Map to actual chat_messages schema columns:
+      //   sender TEXT CHECK (sender IN ('user', 'bot'))  — NOT 'role'/'assistant'
+      //   text   TEXT NOT NULL                           — NOT 'content'
+      //   card_data JSONB, sources JSONB
+      //   created_at: omitted so Postgres uses its DEFAULT NOW()
+      const rows = messages.map((m) => {
+        const senderValue = m.sender === 'user' ? 'user' : 'bot';
+        const row = {
+          session_id: id,
+          sender: senderValue,
+          text: m.text || m.content || ''
+        };
+        // Preserve card_data if present (weather cards, etc.)
+        if (m.card !== undefined && m.card !== null) {
+          row.card_data = m.card;
+        }
+        // Preserve sources if present
+        if (m.sources !== undefined && m.sources !== null) {
+          row.sources = m.sources;
+        }
+        // Do NOT use m.timestamp — it is a human-readable locale string ("03:42 pm"),
+        // which is not a valid TIMESTAMPTZ. Let Postgres use DEFAULT NOW() instead.
+        return row;
+      });
 
       const { error: msgError } = await supabase.from('chat_messages').insert(rows);
 
       if (msgError) {
-        console.warn('[AERIS CHAT] Message insert warning:', msgError.message);
+        console.error('[AERIS CHAT] Message insert failed:', msgError.message, '| code:', msgError.code);
+        return res.status(500).json({ error: 'Chat session saved but messages could not be stored.' });
       }
     }
 
