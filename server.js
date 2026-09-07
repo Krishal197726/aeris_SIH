@@ -345,30 +345,78 @@ app.get('/api/auth/google/callback', async (req, res) => {
  * ========================================================================= */
 
 // Check if email exists in database
-app.post('/api/auth/check-email', (req, res) => {
+app.post('/api/auth/check-email', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Check Supabase public.profiles if Supabase is configured
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      if (!error && profile) {
+        return res.json({ exists: true });
+      }
+    } catch (err) {
+      console.warn('[AERIS AUTH] check-email Supabase check error:', err.message);
+    }
+  }
+
+  // Fallback to legacy users.json
   const users = loadUsers();
-  const exists = users.some(u => u.email.toLowerCase() === email.trim().toLowerCase());
+  const exists = users.some(u => u.email.toLowerCase() === normalizedEmail);
   res.json({ exists });
 });
 
 // Search matching emails for first-letter auto-suggestion
-app.get('/api/auth/matching-emails', (req, res) => {
+app.get('/api/auth/matching-emails', async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase();
   if (!q) {
     return res.json({ matches: [] });
   }
 
-  const users = loadUsers();
-  const matches = users
-    .filter(u => u.email.toLowerCase().startsWith(q))
-    .map(u => u.email);
+  const matchesSet = new Set();
 
-  res.json({ matches });
+  // 1. Check Supabase public.profiles if configured
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .ilike('email', `${q}%`)
+        .limit(10);
+
+      if (!error && Array.isArray(profiles)) {
+        for (const p of profiles) {
+          if (p.email) matchesSet.add(p.email.toLowerCase());
+        }
+      }
+    } catch (err) {
+      console.warn('[AERIS AUTH] matching-emails Supabase query failed:', err.message);
+    }
+  }
+
+  // 2. Legacy users.json fallback/merge
+  try {
+    const users = loadUsers();
+    for (const u of users) {
+      if (u.email && u.email.toLowerCase().startsWith(q)) {
+        matchesSet.add(u.email.toLowerCase());
+      }
+    }
+  } catch (err) {
+    console.warn('[AERIS AUTH] matching-emails users.json read failed:', err.message);
+  }
+
+  res.json({ matches: Array.from(matchesSet).slice(0, 10) });
 });
 
 // User Login
