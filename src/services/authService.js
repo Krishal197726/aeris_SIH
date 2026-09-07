@@ -1,9 +1,10 @@
 /**
- * AERIS Real Authentication & Storage Service
- * Communicates with the secure backend API for real Google OAuth 2.0,
- * Real Nodemailer / SMTP Email OTP delivery (zero client-side simulation),
- * and salted SHA-256 password management.
+ * AERIS Authentication & Storage Service
+ * Integrates with Supabase Auth for persistent session management,
+ * while maintaining backward-compatible API contracts for modals and UI components.
  */
+
+import { supabase } from '../lib/supabase.js';
 
 const SESSION_STORAGE_KEY = 'aeris_auth_session';
 
@@ -20,7 +21,7 @@ export function getInitials(name = '') {
 }
 
 /**
- * Retrieve current active session from localStorage if present
+ * Retrieve current active session user from localStorage (cached fallback)
  */
 export function getCurrentSession() {
   try {
@@ -35,7 +36,7 @@ export function getCurrentSession() {
 }
 
 /**
- * Save active session to localStorage
+ * Save active session to localStorage (legacy compatibility layer)
  */
 export function createActiveSession(token, user) {
   const sessionData = {
@@ -48,12 +49,83 @@ export function createActiveSession(token, user) {
 
 /**
  * Terminate active session (Log Out)
+ * Clears both Supabase browser session and local cached storage.
  */
-export function destroySession() {
+export async function destroySession() {
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY);
+    await supabase.auth.signOut();
   } catch (err) {
     console.error('Failed to destroy session:', err);
+  }
+}
+
+/**
+ * Get current active Bearer token (Supabase access_token with localStorage fallback)
+ */
+export async function getAuthToken() {
+  try {
+    const { data: { session } = {} } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return session.access_token;
+    }
+  } catch (e) {
+    // Ignore error and try localStorage fallback
+  }
+
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (raw) {
+      const sessionData = JSON.parse(raw);
+      return sessionData?.token || null;
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  return null;
+}
+
+/**
+ * Centralized Authenticated Fetch Wrapper
+ * Automatically attaches Authorization: Bearer <token> if an active session exists.
+ */
+export async function authFetch(url, options = {}) {
+  const token = await getAuthToken();
+  const headers = {
+    ...options.headers
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return fetch(url, { ...options, headers });
+}
+
+/**
+ * Retrieve authenticated user profile from /api/auth/me using Bearer token
+ */
+export async function fetchCurrentUserProfile(token) {
+  const authToken = token || await getAuthToken();
+  if (!authToken) return null;
+
+  try {
+    const res = await fetch('/api/auth/me', {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    return data?.user || null;
+  } catch (err) {
+    console.warn('[AERIS AUTH SERVICE] /api/auth/me verification failed:', err.message);
+    return null;
   }
 }
 
@@ -168,6 +240,18 @@ export async function authenticateUser(email, password) {
     throw new Error(data.error || 'Invalid email or password.');
   }
 
+  // Establish Supabase browser session if session tokens returned
+  if (data.session?.access_token && data.session?.refresh_token) {
+    try {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      });
+    } catch (sessionErr) {
+      console.warn('[AERIS AUTH SERVICE] Failed to sync Supabase client session:', sessionErr.message);
+    }
+  }
+
   createActiveSession(data.token, data.user);
   return data.user;
 }
@@ -190,6 +274,18 @@ export async function registerUser({ name, email, password, role = 'Citizen' }) 
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.error || 'Registration failed.');
+  }
+
+  // Establish Supabase browser session if session tokens returned
+  if (data.session?.access_token && data.session?.refresh_token) {
+    try {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      });
+    } catch (sessionErr) {
+      console.warn('[AERIS AUTH SERVICE] Failed to sync Supabase client session:', sessionErr.message);
+    }
   }
 
   createActiveSession(data.token, data.user);
@@ -220,7 +316,6 @@ export async function requestPasswordResetOTP(email) {
     throw new Error(data.error || 'Failed to send verification code.');
   }
 
-  // Real Email has been dispatched. NEVER return or expose the OTP.
   return {
     success: true,
     message: data.message || "We've sent a 6-digit verification code to your email.",
@@ -316,7 +411,7 @@ export async function resetPasswordWithToken({ email, resetToken, newPassword, c
     throw new Error(data.error || 'Failed to update password.');
   }
 
-  destroySession();
+  await destroySession();
   return {
     success: true,
     message: data.message || 'Password reset successfully!'

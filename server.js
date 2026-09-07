@@ -8,6 +8,9 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { supabase } from './server/config/supabase.js';
+import { supabaseAuth, isSupabaseAuthConfigured } from './server/config/supabaseAuth.js';
+import { authGuard } from './server/middleware/authGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -369,14 +372,59 @@ app.get('/api/auth/matching-emails', (req, res) => {
 });
 
 // User Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // 1. Primary path: Supabase Auth
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
+        email: normalizedEmail,
+        password
+      });
+
+      if (!authError && authData?.user && authData?.session) {
+        // Fetch user profile from public.profiles using privileged client
+        let profile = null;
+        try {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+          profile = profileRow;
+        } catch (profileErr) {
+          console.warn('[AERIS AUTH SERVER] Profile lookup failed, falling back to metadata:', profileErr.message);
+        }
+
+        const safeUser = {
+          id: authData.user.id,
+          name: profile?.name || authData.user.user_metadata?.name || normalizedEmail.split('@')[0],
+          email: authData.user.email || normalizedEmail,
+          role: profile?.role || authData.user.user_metadata?.role || 'Citizen',
+          avatarColor: profile?.avatar_color || authData.user.user_metadata?.avatar_color || 'from-emerald-500 to-teal-600'
+        };
+
+        return res.json({
+          success: true,
+          token: authData.session.access_token,
+          user: safeUser,
+          session: authData.session
+        });
+      }
+    } catch (err) {
+      console.warn('[AERIS AUTH SERVER] Supabase sign-in error, checking legacy fallback:', err.message);
+    }
+  }
+
+  // 2. Legacy fallback: users.json + bcrypt
   const users = loadUsers();
-  const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
+  const user = users.find(u => u.email.toLowerCase() === normalizedEmail);
 
   if (!user) {
     return res.status(404).json({ error: "User doesn't exist." });
@@ -396,7 +444,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // User Sign Up
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {
   const { name, email, password, role = 'Citizen' } = req.body;
 
   if (!name || !name.trim()) {
@@ -413,6 +461,68 @@ app.post('/api/auth/signup', (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   }
 
+  const avatar_color = 'from-emerald-500 to-teal-600';
+
+  // 1. Primary path: Supabase Auth
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: authData, error: authError } = await supabaseAuth.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            name: name.trim(),
+            role,
+            avatar_color
+          }
+        }
+      });
+
+      if (authError) {
+        if (authError.status === 422 || authError.message?.toLowerCase().includes('already registered')) {
+          return res.status(409).json({ error: 'An account with this email address already exists.' });
+        }
+        return res.status(400).json({ error: authError.message || 'Registration failed.' });
+      }
+
+      if (authData?.user) {
+        // Query public.profiles row created by the database trigger
+        let profile = null;
+        try {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+          profile = profileRow;
+        } catch (profileErr) {
+          console.warn('[AERIS AUTH SERVER] Profile lookup failed after signup:', profileErr.message);
+        }
+
+        const safeUser = {
+          id: authData.user.id,
+          name: profile?.name || authData.user.user_metadata?.name || name.trim(),
+          email: authData.user.email || normalizedEmail,
+          role: profile?.role || authData.user.user_metadata?.role || role,
+          avatarColor: profile?.avatar_color || authData.user.user_metadata?.avatar_color || avatar_color
+        };
+
+        const token = authData.session?.access_token || createSessionToken(safeUser);
+
+        return res.json({
+          success: true,
+          token,
+          user: safeUser,
+          session: authData.session || null
+        });
+      }
+    } catch (err) {
+      console.error('[AERIS AUTH SERVER] Supabase signup exception:', err);
+      return res.status(500).json({ error: 'Registration failed due to a server error. Please try again.' });
+    }
+  }
+
+  // 2. Legacy fallback: users.json + bcrypt (preserved per Task 3 instructions)
   const users = loadUsers();
   if (users.some(u => u.email.toLowerCase() === normalizedEmail)) {
     return res.status(409).json({ error: 'An account with this email address already exists.' });
@@ -712,35 +822,45 @@ app.delete('/api/chats/:id', (req, res) => {
  * 5. SYSTEM HEALTH & SESSION UTILITIES
  * ========================================================================= */
 
-// Verify session and get authenticated user
-app.get('/api/auth/me', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: 'No authorization token provided.' });
-  }
-
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!token) {
-    return res.status(401).json({ error: 'Empty authorization token.' });
-  }
-
+// Verify session and get authenticated user (Supabase Auth via authGuard)
+app.get('/api/auth/me', authGuard, async (req, res) => {
   try {
-    const decoded = jwt.verify(token, SESSION_SECRET);
-    const users = loadUsers();
-    const user = users.find(u => u.id === decoded.id || u.email.toLowerCase() === decoded.email?.toLowerCase());
-    if (!user) {
-      return res.status(401).json({ error: 'User no longer exists.' });
+    const authUser = req.user;
+    if (!authUser || !authUser.id) {
+      return res.status(401).json({ error: 'User session is invalid.' });
     }
-    return res.json({ success: true, user: sanitizeUser(user) });
-  } catch (err) {
-    // If fallback opaque token format
-    if (token.startsWith('aeris_tok_')) {
-      const users = loadUsers();
-      if (users.length > 0) {
-        return res.json({ success: true, user: sanitizeUser(users[0]) });
+
+    // Query public.profiles using privileged Supabase client
+    let profile = null;
+    try {
+      const { data: profileRow, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn('[AERIS AUTH SERVER] Profile lookup warning in /api/auth/me:', profileError.message);
+      } else {
+        profile = profileRow;
       }
+    } catch (err) {
+      console.warn('[AERIS AUTH SERVER] Exception querying profiles in /api/auth/me:', err.message);
     }
-    return res.status(401).json({ error: 'Session expired or invalid.' });
+
+    // Map to the canonical frontend user shape
+    const safeUser = {
+      id: authUser.id,
+      name: profile?.name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+      email: authUser.email,
+      role: profile?.role || authUser.user_metadata?.role || 'Citizen',
+      avatarColor: profile?.avatar_color || authUser.user_metadata?.avatar_color || 'from-emerald-500 to-teal-600'
+    };
+
+    return res.json({ success: true, user: safeUser });
+  } catch (err) {
+    console.error('[AERIS AUTH SERVER] Unexpected error in /api/auth/me:', err);
+    return res.status(500).json({ error: 'Failed to retrieve authenticated user profile.' });
   }
 });
 

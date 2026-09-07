@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   getCurrentSession,
+  createActiveSession,
+  destroySession,
+  fetchCurrentUserProfile,
   handleOAuthRedirectSession,
   getGoogleAuthUrl,
   registerUser,
   authenticateUser,
-  destroySession,
   getInitials,
   checkUserExists,
   findMatchingEmails,
@@ -47,22 +50,81 @@ export function AuthProvider({ children }) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // 1. Check if user just completed Google OAuth callback redirect
-    const { user: oauthUser, error: oauthErr } = handleOAuthRedirectSession();
-    if (oauthUser) {
-      setCurrentUser(oauthUser);
-    } else if (oauthErr) {
-      setOauthError(oauthErr);
-      setAuthModalMode('initial');
-      setIsAuthModalOpen(true);
-    } else {
-      // 2. Check existing session
-      const existing = getCurrentSession();
-      if (existing) {
-        setCurrentUser(existing);
+    let isMounted = true;
+
+    async function initAuth() {
+      try {
+        // 1. Check if user just completed Google OAuth callback redirect
+        const { user: oauthUser, error: oauthErr } = handleOAuthRedirectSession();
+        if (oauthUser && isMounted) {
+          setCurrentUser(oauthUser);
+          setIsInitialized(true);
+          return;
+        } else if (oauthErr && isMounted) {
+          setOauthError(oauthErr);
+          setAuthModalMode('initial');
+          setIsAuthModalOpen(true);
+          setIsInitialized(true);
+          return;
+        }
+
+        // 2. Query Supabase browser session as Primary Source of Truth
+        const { data: { session } = {} } = await supabase.auth.getSession();
+
+        if (session?.access_token) {
+          // Validate session with /api/auth/me
+          const verifiedProfile = await fetchCurrentUserProfile(session.access_token);
+          if (verifiedProfile && isMounted) {
+            setCurrentUser(verifiedProfile);
+            createActiveSession(session.access_token, verifiedProfile);
+            setIsInitialized(true);
+            return;
+          } else {
+            // Token expired or invalid: clear session
+            await supabase.auth.signOut();
+            await destroySession();
+            if (isMounted) setCurrentUser(null);
+          }
+        } else {
+          // 3. Fallback check for legacy cached session (offline/fallback compatibility)
+          const cachedUser = getCurrentSession();
+          if (cachedUser && isMounted) {
+            setCurrentUser(cachedUser);
+          }
+        }
+      } catch (err) {
+        console.warn('[AERIS AUTH CONTEXT] Session initialization failed:', err);
+      } finally {
+        if (isMounted) setIsInitialized(true);
       }
     }
-    setIsInitialized(true);
+
+    initAuth();
+
+    // 4. Subscribe to Supabase auth state changes
+    const { data: { subscription } = {} } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.access_token) {
+          const profile = await fetchCurrentUserProfile(session.access_token);
+          if (profile && isMounted) {
+            setCurrentUser(profile);
+            createActiveSession(session.access_token, profile);
+          }
+        }
+      } else if (event === 'SIGNED_OUT') {
+        if (isMounted) {
+          setCurrentUser(null);
+          await destroySession();
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const openAuthModal = (mode = 'initial') => {
@@ -93,8 +155,8 @@ export function AuthProvider({ children }) {
     return user;
   };
 
-  const logout = () => {
-    destroySession();
+  const logout = async () => {
+    await destroySession();
     setCurrentUser(null);
   };
 
