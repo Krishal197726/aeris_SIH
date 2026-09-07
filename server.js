@@ -738,84 +738,156 @@ app.post('/api/auth/forgot-password/reset-password', (req, res) => {
 });
 
 /* =========================================================================
- * 4. REAL USER CHAT PERSISTENCE ENDPOINTS
+ * 4. CHAT PERSISTENCE ENDPOINTS (Supabase-backed, authGuard protected)
  * ========================================================================= */
 
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-
-function loadChats() {
+// GET /api/chats — fetch all chat sessions for the authenticated user
+app.get('/api/chats', authGuard, async (req, res) => {
+  const userId = req.user.id;
   try {
-    if (!fs.existsSync(CHATS_FILE)) {
-      fs.writeFileSync(CHATS_FILE, JSON.stringify([], null, 2));
-      return [];
+    const { data: sessions, error } = await supabase
+      .from('chat_sessions')
+      .select('id, title, created_at, updated_at')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('[AERIS CHAT] GET /api/chats error:', error.message);
+      return res.status(500).json({ error: 'Failed to load chats.' });
     }
-    const data = fs.readFileSync(CHATS_FILE, 'utf-8');
-    return JSON.parse(data);
+
+    // For each session, fetch messages
+    const chats = await Promise.all(
+      (sessions || []).map(async (session) => {
+        const { data: messages } = await supabase
+          .from('chat_messages')
+          .select('id, role, content, created_at')
+          .eq('session_id', session.id)
+          .order('created_at', { ascending: true });
+
+        return {
+          id: session.id,
+          title: session.title,
+          createdAt: session.created_at,
+          updatedAt: session.updated_at,
+          messages: (messages || []).map((m) => ({
+            id: m.id,
+            role: m.role,
+            text: m.content,
+            timestamp: m.created_at
+          }))
+        };
+      })
+    );
+
+    return res.json({ success: true, chats });
   } catch (err) {
-    console.error('Failed to load chats:', err);
-    return [];
+    console.error('[AERIS CHAT] GET /api/chats exception:', err);
+    return res.status(500).json({ error: 'Unexpected error loading chats.' });
   }
-}
-
-function saveChats(chats) {
-  try {
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2));
-  } catch (err) {
-    console.error('Failed to save chats:', err);
-  }
-}
-
-// Get user chats
-app.get('/api/chats', (req, res) => {
-  const userEmail = (req.query.userEmail || '').trim().toLowerCase();
-  const allChats = loadChats();
-  
-  if (userEmail) {
-    const userChats = allChats.filter(c => (c.userEmail || '').toLowerCase() === userEmail);
-    return res.json({ success: true, chats: userChats });
-  }
-
-  // If no email query, return guest/recent chats
-  const guestChats = allChats.filter(c => !c.userEmail || c.userEmail === 'guest');
-  res.json({ success: true, chats: guestChats });
 });
 
-// Save / Update a chat
-app.post('/api/chats', (req, res) => {
-  const { id, title, messages, userEmail = 'guest', createdAt, updatedAt } = req.body;
+// POST /api/chats — upsert a chat session and its messages
+app.post('/api/chats', authGuard, async (req, res) => {
+  const userId = req.user.id;
+  const { id, title, messages = [], createdAt, updatedAt } = req.body;
+
   if (!id || !title) {
     return res.status(400).json({ error: 'Chat ID and title are required.' });
   }
 
-  const allChats = loadChats();
-  const existingIdx = allChats.findIndex(c => c.id === id);
+  const now = new Date().toISOString();
 
-  const chatRecord = {
-    id,
-    title,
-    messages: messages || [],
-    userEmail: (userEmail || 'guest').toLowerCase(),
-    createdAt: createdAt || new Date().toISOString(),
-    updatedAt: updatedAt || new Date().toISOString()
-  };
+  try {
+    // Upsert session row
+    const { data: session, error: sessionError } = await supabase
+      .from('chat_sessions')
+      .upsert(
+        {
+          id,
+          user_id: userId,
+          title,
+          created_at: createdAt || now,
+          updated_at: updatedAt || now
+        },
+        { onConflict: 'id' }
+      )
+      .select()
+      .single();
 
-  if (existingIdx >= 0) {
-    allChats[existingIdx] = { ...allChats[existingIdx], ...chatRecord };
-  } else {
-    allChats.unshift(chatRecord);
+    if (sessionError) {
+      console.error('[AERIS CHAT] Session upsert error:', sessionError.message);
+      return res.status(500).json({ error: 'Failed to save chat session.' });
+    }
+
+    // Replace all messages for this session (delete + insert)
+    if (messages.length > 0) {
+      await supabase.from('chat_messages').delete().eq('session_id', id);
+
+      const rows = messages.map((m) => ({
+        session_id: id,
+        role: m.role || (m.sender === 'user' ? 'user' : 'assistant'),
+        content: m.text || m.content || '',
+        created_at: m.timestamp || m.created_at || now
+      }));
+
+      const { error: msgError } = await supabase.from('chat_messages').insert(rows);
+
+      if (msgError) {
+        console.warn('[AERIS CHAT] Message insert warning:', msgError.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      chat: {
+        id: session.id,
+        title: session.title,
+        createdAt: session.created_at,
+        updatedAt: session.updated_at
+      }
+    });
+  } catch (err) {
+    console.error('[AERIS CHAT] POST /api/chats exception:', err);
+    return res.status(500).json({ error: 'Unexpected error saving chat.' });
   }
-
-  saveChats(allChats);
-  res.json({ success: true, chat: chatRecord });
 });
 
-// Delete a chat
-app.delete('/api/chats/:id', (req, res) => {
+// DELETE /api/chats/:id — delete a chat session (and cascade messages)
+app.delete('/api/chats/:id', authGuard, async (req, res) => {
+  const userId = req.user.id;
   const { id } = req.params;
-  let allChats = loadChats();
-  allChats = allChats.filter(c => c.id !== id);
-  saveChats(allChats);
-  res.json({ success: true, message: 'Chat deleted.' });
+
+  try {
+    // Verify ownership before deleting
+    const { data: session, error: fetchError } = await supabase
+      .from('chat_sessions')
+      .select('id, user_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('[AERIS CHAT] DELETE ownership check error:', fetchError.message);
+      return res.status(500).json({ error: 'Failed to verify chat ownership.' });
+    }
+
+    if (!session) {
+      return res.status(404).json({ error: 'Chat not found.' });
+    }
+
+    if (session.user_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this chat.' });
+    }
+
+    // Delete messages first, then session
+    await supabase.from('chat_messages').delete().eq('session_id', id);
+    await supabase.from('chat_sessions').delete().eq('id', id);
+
+    return res.json({ success: true, message: 'Chat deleted.' });
+  } catch (err) {
+    console.error('[AERIS CHAT] DELETE /api/chats/:id exception:', err);
+    return res.status(500).json({ error: 'Unexpected error deleting chat.' });
+  }
 });
 
 /* =========================================================================
