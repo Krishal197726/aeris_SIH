@@ -8,6 +8,11 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  getWeather,
+  getCoordinates,
+  getWeatherByCoordinates
+} from './src/services/weatherBackendService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -706,6 +711,95 @@ app.delete('/api/chats/:id', (req, res) => {
   allChats = allChats.filter(c => c.id !== id);
   saveChats(allChats);
   res.json({ success: true, message: 'Chat deleted.' });
+});
+
+/* =========================================================================
+ * 4.5. WEATHER & GEOCODING REST API ENDPOINTS
+ * ========================================================================= */
+
+// Main Weather Telemetry Endpoint (Supports GET /api/weather?location=Ahmedabad or GET /api/weather?lat=23.02&lng=72.57)
+app.get(['/api/weather', '/api/weather/:locationParam'], async (req, res) => {
+  try {
+    const locationQuery = req.query.location || req.params.locationParam;
+    const { lat, lng } = req.query;
+
+    if (!locationQuery && (!lat || !lng)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'LOCATION_MISSING',
+          message: 'Please provide a location query parameter (e.g. /api/weather?location=Ahmedabad) or latitude and longitude.'
+        }
+      });
+    }
+
+    let weatherData;
+    if (locationQuery) {
+      weatherData = await getWeather(locationQuery);
+    } else {
+      weatherData = await getWeatherByCoordinates(lat, lng);
+    }
+
+    return res.json({
+      success: true,
+      location: weatherData.location,
+      current: weatherData.current,
+      forecast: weatherData.forecast,
+      source: weatherData.source,
+      cached: weatherData.cached,
+      timestamp: weatherData.timestamp
+    });
+  } catch (err) {
+    console.error('[AERIS WEATHER API ERROR]:', err.message);
+    const isNotFound = err.code === 'LOCATION_NOT_FOUND' || err.message?.includes('could not be found');
+    const statusCode = isNotFound ? 404 : 500;
+
+    return res.status(statusCode).json({
+      success: false,
+      error: {
+        code: isNotFound ? 'LOCATION_NOT_FOUND' : 'WEATHER_PROVIDER_ERROR',
+        message: err.message || 'Unable to retrieve weather data.'
+      }
+    });
+  }
+});
+
+// Geocoding Search Endpoint (GET /api/locations/search?q=Ahmedabad)
+app.get('/api/locations/search', async (req, res) => {
+  try {
+    const query = req.query.q || req.query.query || req.query.location;
+    if (!query || !query.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'QUERY_MISSING',
+          message: 'Please provide a search query parameter (e.g. /api/locations/search?q=Ahmedabad).'
+        }
+      });
+    }
+
+    const locationObj = await getCoordinates(query);
+    if (!locationObj) {
+      return res.json({
+        success: true,
+        results: []
+      });
+    }
+
+    return res.json({
+      success: true,
+      results: [locationObj]
+    });
+  } catch (err) {
+    console.error('[AERIS GEOCODING API ERROR]:', err.message);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'GEOCODING_ERROR',
+        message: err.message || 'Geocoding service error.'
+      }
+    });
+  }
 });
 
 /* =========================================================================

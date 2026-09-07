@@ -1,11 +1,23 @@
 import { MOCK_KNOWLEDGE_BASE } from '../data/mockWeather';
+import { fetchLiveWeather } from './weatherService';
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function generateWeatherIntelligenceResponse(query, persona = 'citizen') {
-  await delay(600); // realistic inference delay
+export async function generateWeatherIntelligenceResponse(query, persona = 'citizen', liveWeatherData = null) {
+  await delay(300); // realistic inference delay
 
   const normalized = query.toLowerCase();
+
+  // Try fetching live weather if not passed explicitly
+  let liveData = liveWeatherData;
+  if (!liveData) {
+    try {
+      liveData = await fetchLiveWeather(query);
+    } catch (err) {
+      // Smooth fallback if location not found or backend API offline
+      liveData = null;
+    }
+  }
 
   // 1. PERSONA ADVISORY GENERATOR
   const getPersonaAdvisory = (personaId) => {
@@ -13,7 +25,7 @@ export async function generateWeatherIntelligenceResponse(query, persona = 'citi
       case 'farmer':
         return {
           title: 'AGRONOMIC FIELD DIRECTIVE',
-          recommendation: 'HOLD scheduled drip and canal irrigation. Natural precipitation of 28–42 mm expected between 16:00 and 20:30 IST will saturate root zones (0–30 cm). Monitor cotton and groundnut fields for fungal spore germination.',
+          recommendation: 'HOLD scheduled drip and canal irrigation. Soil moisture is optimal. Monitor crops for fungal spore germination during high relative humidity.',
           metrics: [
             { label: 'Root Zone Moisture', val: '34% (Optimal)' },
             { label: 'Evapotranspiration', val: '3.8 mm/day' },
@@ -24,7 +36,7 @@ export async function generateWeatherIntelligenceResponse(query, persona = 'citi
       case 'disaster':
         return {
           title: 'DISASTER REDUCTION & MITIGATION DIRECTIVE',
-          recommendation: 'Alert municipal de-watering units across Ahmedabad urban underpasses (Akhbarnagar, Parimal). Estimated runoff volume: 85,000 m³. Mobilize SDRF Quick Response Teams for low-lying Sabarmati riverfront pockets.',
+          recommendation: 'Alert municipal de-watering units across urban underpasses. Monitor drainage capacity and mobilize SDRF Quick Response Teams for low-lying areas.',
           metrics: [
             { label: 'Runoff Coefficient', val: '0.82 (High)' },
             { label: 'Pop. In Vulnerable Zone', val: '145,000' },
@@ -35,21 +47,21 @@ export async function generateWeatherIntelligenceResponse(query, persona = 'citi
       case 'aviation':
         return {
           title: 'AVIATION METEOROLOGICAL ADVISORY',
-          recommendation: 'Ahmedabad (VAAH / AMD) Runway 23/05: Expect convective turbulence and temporary reduction in RVR to 1,200m between 17:00 and 19:30 IST. Microburst downdrafts up to 32 knots detected in southwest arrival quadrant. Plan contingency fuel for holding.',
+          recommendation: 'Expect convective turbulence and temporary reduction in RVR during convective activity. Microburst downdrafts detected in arrival quadrants. Plan contingency fuel.',
           metrics: [
             { label: 'Cloud Base Ceiling', val: '1,400 ft AGL' },
             { label: 'Vertical Wind Shear', val: '18 kts / 500 ft' },
-            { label: 'Runway Visual Range', val: '3,200 m (Declining)' },
+            { label: 'Runway Visual Range', val: '3,200 m' },
             { label: 'Convective Sigmet', val: 'ACTIVE SIGMET 02' }
           ]
         };
       case 'marine':
         return {
           title: 'MARITIME & COASTAL SAFETY DIRECTIVE',
-          recommendation: 'Gulf of Khambhat & Saurashtra Coast: Significant wave heights rising from 2.2m to 3.4m. Squally winds reaching 45–55 km/h gusting to 65 km/h. Local Cautionary Signal LC-3 hoisted at Bhavnagar and Pipavav ports. Small fishing vessels strictly advised to return to harbor.',
+          recommendation: 'Coastal waters: Significant wave heights rising with gusty winds. Local Cautionary Signal hoisted at ports. Small fishing vessels strictly advised to return to harbor.',
           metrics: [
             { label: 'Swell Wave Height', val: '2.8 – 3.4 m' },
-            { label: 'Peak Gale Gusts', val: '65 km/h' },
+            { label: 'Peak Gale Gusts', val: '45-65 km/h' },
             { label: 'Tidal Cycle', val: 'High Tide 18:42 IST' },
             { label: 'Port Signal', val: 'LC-3 HOISTED' }
           ]
@@ -57,7 +69,7 @@ export async function generateWeatherIntelligenceResponse(query, persona = 'citi
       case 'researcher':
         return {
           title: 'SYNOPTIC & THERMODYNAMIC REANALYSIS',
-          recommendation: 'Convective low-pressure vortex over Northeast Arabian Sea (18.4° N, 69.2° E) showing rapid barometric deepening (-3.8 hPa/3hr). High CAPE values (2,450 J/kg) combined with precipitable water (PWAT: 58 mm) indicate severe mesoscale convective system (MCS) propagation.',
+          recommendation: 'Atmospheric thermodynamic sounding indicates convective moisture influx and elevated CAPE values with precipitable water column support.',
           metrics: [
             { label: 'Surface CAPE', val: '2,450 J/kg' },
             { label: 'PWAT Water Column', val: '58.2 mm' },
@@ -69,12 +81,12 @@ export async function generateWeatherIntelligenceResponse(query, persona = 'citi
       default:
         return {
           title: 'CITIZEN MOBILITY ADVISORY',
-          recommendation: 'Rain is likely tomorrow evening in Ahmedabad after 4:00 PM. Peak intensity expected between 5:00 PM and 7:30 PM. Carry rain protection and consider scheduling outdoor commutes or market trips prior to late afternoon.',
+          recommendation: 'Plan outdoor activities around real-time atmospheric conditions. Carry weather protection and monitor local radar updates.',
           metrics: [
-            { label: 'Precipitation Prob.', val: '78%' },
-            { label: 'Expected Window', val: '4 PM – 8 PM' },
-            { label: 'Rain Volume', val: '25 – 40 mm' },
-            { label: 'UV Index', val: '6 (Moderate)' }
+            { label: 'Precipitation Prob.', val: liveData?.current?.humidity > 80 ? '78%' : '35%' },
+            { label: 'Expected Window', val: 'Late Afternoon' },
+            { label: 'UV Index', val: '6 (Moderate)' },
+            { label: 'Air Quality', val: 'Good' }
           ]
         };
     }
@@ -82,50 +94,57 @@ export async function generateWeatherIntelligenceResponse(query, persona = 'citi
 
   const personaData = getPersonaAdvisory(persona);
 
+  // Real or fallback telemetry variables
+  const locName = liveData?.location ? `${liveData.location.name}, ${liveData.location.state} (${liveData.location.latitude.toFixed(2)}° N, ${liveData.location.longitude.toFixed(2)}° E)` : 'Ahmedabad, Gujarat (23.02° N, 72.57° E)';
+  const currentTempStr = liveData?.current ? `${liveData.current.temperature}°C` : '29.4°C';
+  const tempRangeStr = liveData?.current ? `${Math.round(liveData.current.temperature - 5)}°C — ${Math.round(liveData.current.temperature + 4)}°C` : '24°C — 31°C';
+  const humidityStr = liveData?.current ? `${liveData.current.humidity}%` : '82%';
+  const windStr = liveData?.current ? `${liveData.current.windSpeed} km/h ${liveData.current.windDirection}` : '18 km/h WSW';
+  const conditionStr = liveData?.current ? `${liveData.current.condition} (${liveData.current.description})` : 'Convective cloud bands';
+  const cachedStatus = liveData?.cached ? 'AERIS Cache (TTL Active)' : 'Live Telemetry API Sync';
+  const dataSource = liveData?.source ? `${liveData.source} • ${cachedStatus}` : 'IMD • GFS • WRF • AERIS Ensemble v4.1';
+
   // 2. WHY THIS RISK DIAGNOSTIC BREAKDOWN
   const whyThisRiskDetails = {
     factors: [
       {
-        title: '78% Precipitation Probability',
-        detail: 'Ensemble agreement across ECMWF, GFS, and WRF 3km high-resolution runs confirms heavy convective moisture convergence.'
+        title: `Condition: ${conditionStr}`,
+        detail: `Real-time atmospheric sounding confirms temperature of ${currentTempStr} with relative humidity of ${humidityStr}.`
       },
       {
-        title: 'Increasing Wind & Squall Dynamics',
-        detail: 'Surface winds accelerating from 14 km/h to gust peaks of 42 km/h during convective downdrafts.'
+        title: `Wind Vector: ${windStr}`,
+        detail: 'Surface wind measurements and convective updraft pressure gradients.'
       },
       {
-        title: 'Atmospheric Instability (CAPE > 2,400 J/kg)',
-        detail: 'High thermal lapse rates and Gulf of Khambhat moisture flux creating strong vertical thunderstorm updrafts.'
-      },
-      {
-        title: 'Official Multi-Agency Cross-Check',
-        detail: 'IMD Doppler Radar Bhuj/Ahmedabad reflectivity > 45 dBZ verified against INSAT-3DR infrared sounders.'
+        title: `Data Provider & Cache Status`,
+        detail: `Telemetry sourced via ${dataSource}.`
       }
     ],
-    nwpModels: ['IMD HRRR v4.2', 'GFS 0.25°', 'ECMWF IFS', 'WRF-AERIS Meso 3km'],
-    synopticSource: 'IMD Coastal Radar Network & AERIS Rapid Warning System',
-    timestamp: '14:32 IST (Live Telemetry Sync)'
+    nwpModels: ['Open-Meteo High Resolution', 'GFS 0.25°', 'ECMWF IFS', 'WRF-AERIS Meso 3km'],
+    synopticSource: dataSource,
+    timestamp: liveData?.timestamp ? new Date(liveData.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '14:32 IST'
   };
 
   return {
-    text: `Ahmedabad Weather Intelligence: Deep moisture inflow from the Northeast Arabian Sea is driving convective cloud bands inland. Expected precipitation probability is 78% with moderate to heavy spells during late afternoon.`,
+    text: `${liveData?.location?.name || 'Ahmedabad'} Weather Intelligence: Current temperature is ${currentTempStr} with ${conditionStr}. Relative humidity is at ${humidityStr} with wind speed of ${windStr}. Telemetry synchronized via ${dataSource}.`,
     card: {
       type: 'METEOROLOGICAL_COMMAND_CARD',
-      location: 'Ahmedabad, Gujarat (23.02° N, 72.57° E)',
-      tempRange: '24°C — 31°C',
-      currentTemp: '29.4°C',
-      rainProb: 78,
-      windSpeed: '18 km/h WSW (Gusts 42 km/h)',
-      humidity: '82%',
-      riskLevel: 'MODERATE TO HIGH',
+      location: locName,
+      tempRange: tempRangeStr,
+      currentTemp: currentTempStr,
+      rainProb: liveData?.current?.humidity > 75 ? 78 : 35,
+      windSpeed: windStr,
+      humidity: humidityStr,
+      riskLevel: liveData?.current?.humidity > 80 ? 'HIGH RISK' : 'MODERATE RISK',
       riskColor: '#f59e0b',
       personaAdvisory: personaData,
       whyThisRisk: whyThisRiskDetails,
-      source: 'IMD • GFS • WRF • AERIS Ensemble v4.1',
-      updated: '14:32 IST'
+      source: dataSource,
+      updated: liveData?.timestamp ? new Date(liveData.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'Live Telemetry'
     }
   };
 }
+
 
 export async function analyzeWeatherImage(imageUrl, fileName = 'sky_analysis.jpg') {
   await delay(1100);

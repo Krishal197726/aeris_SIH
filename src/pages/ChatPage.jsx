@@ -11,6 +11,7 @@ import {
   generateWeatherIntelligenceResponse,
   analyzeWeatherImage
 } from '../services/aiService';
+import { fetchLiveWeather } from '../services/weatherService';
 import {
   extractLocationFromQuery
 } from '../utils/geoUtils';
@@ -54,22 +55,6 @@ export default function ChatPage() {
   const handleSearch = async (text) => {
     if (!text.trim()) return;
 
-    // 1. Natural Language Geolocation Detection
-    const detectedGeo = extractLocationFromQuery(text);
-
-    if (detectedGeo) {
-      // Trigger cinematic Google-Earth globe flight
-      setFocusTarget({
-        lat: detectedGeo.lat,
-        lng: detectedGeo.lng,
-        zoom: 1.95,
-        name: detectedGeo.name
-      });
-      setTelemetryStatus(`Locating ${detectedGeo.name}...`);
-    } else {
-      setTelemetryStatus('Scanning atmospheric satellite feeds...');
-    }
-
     const userMessage = {
       id: `usr-${Date.now()}`,
       sender: 'user',
@@ -80,35 +65,46 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     addMessageToChat(userMessage);
     setIsLoading(true);
+    setTelemetryStatus('Querying AERIS Backend Weather Gateway...');
+
+    // 1. Natural Language Geolocation Fallback Detection
+    const detectedGeo = extractLocationFromQuery(text);
 
     try {
-      if (detectedGeo) {
-        await new Promise((r) => setTimeout(r, 600));
+      // 2. Fetch real live weather telemetry from backend /api/weather
+      let liveWeatherData = null;
+      try {
+        liveWeatherData = await fetchLiveWeather(text);
+      } catch (err) {
+        console.warn('Backend live weather lookup failed:', err.message);
+      }
+
+      if (liveWeatherData?.location) {
+        const { latitude, longitude, name, state } = liveWeatherData.location;
+        setFocusTarget({
+          lat: latitude,
+          lng: longitude,
+          zoom: 1.95,
+          name: `${name}, ${state}`
+        });
+        setTelemetryStatus(`Synchronized live telemetry for ${name}...`);
+      } else if (detectedGeo) {
+        setFocusTarget({
+          lat: detectedGeo.lat,
+          lng: detectedGeo.lng,
+          zoom: 1.95,
+          name: detectedGeo.name
+        });
         setTelemetryStatus(`Focusing Earth on ${detectedGeo.name}...`);
-        await new Promise((r) => setTimeout(r, 800));
-        setTelemetryStatus(`Retrieving meteorological telemetry for ${detectedGeo.name}...`);
       }
 
-      const response = await generateWeatherIntelligenceResponse(text, currentPersona.id);
-
-      let resolvedCard = response.card;
-      if (detectedGeo && resolvedCard) {
-        resolvedCard = {
-          ...resolvedCard,
-          location: `${detectedGeo.name} (${detectedGeo.lat.toFixed(2)}° N, ${detectedGeo.lng.toFixed(2)}° E)`,
-          currentTemp: detectedGeo.temp,
-          rainProb: parseInt(detectedGeo.rain, 10) || 75,
-          windSpeed: detectedGeo.wind,
-          humidity: detectedGeo.humidity,
-          riskLevel: detectedGeo.risk
-        };
-      }
+      const response = await generateWeatherIntelligenceResponse(text, currentPersona.id, liveWeatherData);
 
       const botMessage = {
         id: `bot-${Date.now()}`,
         sender: 'aeris',
         text: response.text,
-        card: resolvedCard,
+        card: response.card,
         timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -116,11 +112,21 @@ export default function ChatPage() {
       addMessageToChat(botMessage);
     } catch (error) {
       console.error('Error in weather intelligence query:', error);
+
+      const errorMessage = {
+        id: `bot-err-${Date.now()}`,
+        sender: 'aeris',
+        text: `⚠️ Weather Intelligence Error: Unable to retrieve weather data for "${text}". ${error.message || 'Please check the location name and try again.'}`,
+        timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      addMessageToChat(errorMessage);
     } finally {
       setIsLoading(false);
       setTelemetryStatus('');
     }
   };
+
 
   const handleImageAnalysis = async ({ url, name, prompt }) => {
     const userPrompt = prompt || `Analyze this weather image: ${name}`;
