@@ -1,5 +1,78 @@
 [
   {
+    "id": "chat_1788886673846_qbv9j",
+    "title": "Hello! Welcome to your WeatherGPT daily br...",
+    "messages": [
+      {
+        "id": "bot-1788886673844",
+        "sender": "aeris",
+        "text": "Hello! Welcome to your WeatherGPT daily briefing for Ahmedabad. \n\nTo help you plan your day comfortably, here is the current atmospheric snapshot: it is a warm 29.4°C with high humidity at 71%. There is a 20% chance of light drizzle today, so keeping a compact umbrella handy is a smart, low-effort precaution. Temperatures will peak around 34.6°C, so stay hydrated and try to schedule heavy outdoor activities for the cooler morning or late evening hours.",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Ahmedabad",
+          "tempRange": "26.4°C — 34.6°C",
+          "currentTemp": "29.4°C",
+          "rainProb": 20,
+          "windSpeed": "7.4 km/h SW",
+          "humidity": "71%",
+          "riskLevel": "MODERATE",
+          "riskColor": "#10b981",
+          "personaAdvisory": {
+            "title": "CITIZEN DIRECTIVE",
+            "recommendation": "Carry a light umbrella for potential light drizzle (20% probability) and stay hydrated in the warm, humid conditions (71% humidity). Plan major outdoor activities for early morning or late evening to avoid peak heat.",
+            "metrics": [
+              {
+                "label": "Precipitation Risk",
+                "val": "20% Probability (Light Drizzle)"
+              },
+              {
+                "label": "Comfort Index",
+                "val": "Warm & Humid (71%)"
+              },
+              {
+                "label": "Best Outdoor Window",
+                "val": "Early morning / Late evening"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "Atmospheric Moisture",
+                "detail": "Relative humidity is at 71%, creating a warm and sticky ambient feel alongside 29.4°C temperatures."
+              },
+              {
+                "title": "Precipitation Outlook",
+                "detail": "A 20% chance of light drizzle is forecast, indicating a low but non-zero probability of brief wet spells."
+              }
+            ]
+          },
+          "source": "OPEN_METEO_LIVE_NWP_ENSEMBLE",
+          "updated": "2026-09-08T16:57:34.536Z"
+        },
+        "timestamp": "10:27 PM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-08T16:57:53.846Z",
+    "updatedAt": "2026-09-08T16:57:53.846Z"
+  },
+  {
+    "id": "chat_1788886653341_m7lns",
+    "title": "hello",
+    "messages": [
+      {
+        "id": "usr-1788886653313",
+        "sender": "user",
+        "text": "hello",
+        "timestamp": "10:27 PM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-08T16:57:33.341Z",
+    "updatedAt": "2026-09-08T16:57:33.341Z"
+  },
+  {
     "id": "chat_1788726686290_vmw0j",
     "title": "AERIS (WeatherGPT) is your real‑time meteo...",
     "messages": [

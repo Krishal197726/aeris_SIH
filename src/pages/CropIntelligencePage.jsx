@@ -793,28 +793,33 @@ export default function CropIntelligencePage() {
         {activeTab === 'ai_synthesis' && (
           <div className="space-y-6">
             {/* Custom Prompt Box */}
-            <div className="p-5 rounded-3xl bg-slate-900/70 border border-slate-800 flex flex-col sm:flex-row items-center gap-3">
+            <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/70 border border-slate-800 flex flex-col md:flex-row items-stretch md:items-center gap-3">
               <input
                 type="text"
                 value={customAiQuery}
                 onChange={(e) => setCustomAiQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !loadingAi) {
+                    handleRunAiAnalysis();
+                  }
+                }}
                 placeholder="Ask specific agronomy questions (e.g. 'Should I apply urea now considering the rainfall forecast?')"
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-xs sm:text-sm text-slate-200 outline-none focus:border-cyan-500/50 transition-colors"
+                className="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3.5 text-xs sm:text-sm text-slate-200 outline-none focus:border-cyan-500/50 transition-colors"
               />
               <button
                 type="button"
                 onClick={handleRunAiAnalysis}
                 disabled={loadingAi}
-                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shrink-0 transition-all shadow-lg shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
+                className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shrink-0 whitespace-nowrap transition-all shadow-lg shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
               >
                 {loadingAi ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
                     <span>Synthesizing...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 shrink-0" />
                     <span>Run OpenRouter Agri-AI</span>
                   </>
                 )}
