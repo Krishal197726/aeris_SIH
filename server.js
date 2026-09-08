@@ -707,7 +707,170 @@ app.delete('/api/chats/:id', (req, res) => {
   saveChats(allChats);
   res.json({ success: true, message: 'Chat deleted.' });
 });
+/* =========================================================================
+ * REAL WEATHER ALERTS - GOOGLE WEATHER API
+ * ========================================================================= */
 
+const GOOGLE_WEATHER_BASE = 'https://weather.googleapis.com/v1';
+
+function getGoogleWeatherApiKey() {
+  return (
+    process.env.GOOGLE_WEATHER_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    ''
+  ).trim();
+}
+
+app.get('/api/weather/alerts', async (req, res) => {
+  try {
+    const apiKey = getGoogleWeatherApiKey();
+
+    if (!apiKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'Google Weather API key is not configured on the server.'
+      });
+    }
+
+    const latitude = Number(req.query.lat);
+    const longitude = Number(req.query.lng);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid latitude and longitude are required.'
+      });
+    }
+
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return res.status(400).json({
+        success: false,
+        error: 'Latitude or longitude is outside the valid range.'
+      });
+    }
+
+    const url = new URL(`${GOOGLE_WEATHER_BASE}/publicAlerts:lookup`);
+
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('location.latitude', String(latitude));
+    url.searchParams.set('location.longitude', String(longitude));
+    url.searchParams.set('languageCode', 'en');
+
+    const response = await fetch(url);
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error(
+        '[AERIS WEATHER] Google Public Alerts API error:',
+        response.status,
+        data
+      );
+
+      return res.status(response.status).json({
+        success: false,
+        error: data?.error?.message || 'Failed to retrieve weather alerts.'
+      });
+    }
+
+    const alerts = Array.isArray(data.weatherAlerts)
+      ? data.weatherAlerts
+      : [];
+
+    const normalizedAlerts = alerts.map((alert) => ({
+      id: alert.alertId || crypto.randomUUID(),
+
+      title:
+        alert.alertTitle?.text ||
+        alert.description ||
+        alert.eventType ||
+        'Weather Alert',
+
+      eventType: alert.eventType || 'UNKNOWN',
+
+      area:
+        alert.areaName ||
+        'Affected area unavailable',
+
+      description:
+        alert.description ||
+        alert.alertTitle?.text ||
+        'Weather alert issued for this location.',
+
+      instruction:
+        alert.instruction ||
+        '',
+
+      safetyRecommendations:
+        alert.safetyRecommendations ||
+        '',
+
+      severity:
+        alert.severity ||
+        'UNKNOWN',
+
+      certainty:
+        alert.certainty ||
+        'UNKNOWN',
+
+      urgency:
+        alert.urgency ||
+        'UNKNOWN',
+
+      startTime:
+        alert.startTime ||
+        null,
+
+      expirationTime:
+        alert.expirationTime ||
+        null,
+
+      timezoneOffset:
+        alert.timezoneOffset ||
+        null,
+
+      dataSource: alert.dataSource
+        ? {
+            publisher:
+              alert.dataSource.publisher || null,
+
+            name:
+              alert.dataSource.name || null,
+
+            url:
+              alert.dataSource.url || null
+          }
+        : null,
+
+      regionCode:
+        alert.regionCode ||
+        null
+    }));
+
+    return res.json({
+      success: true,
+      location: {
+        latitude,
+        longitude
+      },
+      alerts: normalizedAlerts,
+      count: normalizedAlerts.length,
+      source: 'Google Weather API',
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(
+      '[AERIS WEATHER] Failed to fetch real weather alerts:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: 'Unable to retrieve weather alerts right now.'
+    });
+  }
+});
 /* =========================================================================
  * 5. SYSTEM HEALTH & SESSION UTILITIES
  * ========================================================================= */
