@@ -1,5 +1,160 @@
 [
   {
+    "id": "chat_1788887207394_gzjvs",
+    "title": "which crop is best to grow in ahemdabad on...",
+    "messages": [
+      {
+        "id": "usr-1788887207393",
+        "sender": "user",
+        "text": "which crop is best to grow in ahemdabad on 8 sep 2026",
+        "timestamp": "10:36 PM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-08T17:06:47.394Z",
+    "updatedAt": "2026-09-08T17:06:47.394Z"
+  },
+  {
+    "id": "chat_1788887134648_y85tg",
+    "title": "⚠️ CAUTION ADVISED — Urea on Rice at Flowe...",
+    "messages": [
+      {
+        "id": "bot-1788887134647",
+        "sender": "aeris",
+        "text": "⚠️ CAUTION ADVISED — Urea on Rice at Flowering Stage in Ahmedabad:\n\nCurrent conditions: 29.3°C, 72% humidity, 20% rain probability, 9mm forecasted rain in 48h.\n\nAgronomic assessment:\n• Your rice is in the CRITICAL 'Flowering & Grain Development' stage (Day 25–60 of the 120-day cycle).\n• Top-dressing urea during flowering is generally NOT recommended — excess nitrogen now causes excessive vegetative growth, lodging, and poor grain filling (chaffy grains).\n• If leaves show clear nitrogen deficiency (pale yellow, especially older leaves), a VERY light split dose of 5–8 kg urea/acre can be applied, incorporated into moist soil, preferably before the 9mm rain window.\n• With 20% rain probability, immediate washout risk is low, but 9mm incoming rain could cause minor leaching — apply early morning (6–8 AM) so roots can uptake before night.\n• HIGH RISK: Bacterial Leaf Blight probability is 62% — urea-driven lush growth attracts vectors. Monitor for water-soaked lesions on leaf tips.\n\nBetter option: Switch to Potassium Sulfate (0-0-50) @ 10 kg/acre during grain filling to improve grain quality and blast resistance.\n\nIf you confirm nitrogen deficiency, apply urea in a 1% foliar spray (1 kg urea + 100L water + 1g surfactant) for safer, targeted uptake without soil leaching.",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Ahmedabad",
+          "tempRange": "26.4°C — 34.6°C",
+          "currentTemp": "29.3°C",
+          "rainProb": 20,
+          "windSpeed": "6.8 km/h WSW",
+          "humidity": "72%",
+          "riskLevel": "MODERATE",
+          "riskColor": "#f59e0b",
+          "personaAdvisory": {
+            "title": "FARMER DIRECTIVE — UREA ON RICE",
+            "recommendation": "HOLD urea unless severe N-deficiency confirmed. If needed, use light foliar spray (1%) or 5–8 kg/acre soil dose before morning irrigation. Avoid broadcast during flowering.",
+            "metrics": [
+              {
+                "label": "Rain Washout Risk",
+                "val": "20% (Low)"
+              },
+              {
+                "label": "Incoming Rain (48h)",
+                "val": "9 mm"
+              },
+              {
+                "label": "Bacterial Blight Risk",
+                "val": "HIGH (62%)"
+              },
+              {
+                "label": "Crop Stage",
+                "val": "Flowering/Grain"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "Crop Stage Sensitivity",
+                "detail": "Flowering stage — excess N causes lodging & poor grain fill."
+              },
+              {
+                "title": "Rain Forecast",
+                "detail": "9mm incoming in 48h — minor leaching risk if broadcast."
+              },
+              {
+                "title": "Disease Pressure",
+                "detail": "Bacterial Leaf Blight risk HIGH (62%) — lush urea growth attracts vectors."
+              },
+              {
+                "title": "Humidity",
+                "detail": "72% — moderate fungal/bacterial pressure."
+              }
+            ]
+          },
+          "source": "OPEN_METEO_LIVE_NWP_ENSEMBLE + AERIS_AGRI_RULEBASE",
+          "updated": "2026-09-08T17:05:26.794Z"
+        },
+        "timestamp": "10:35 PM"
+      },
+      {
+        "id": "usr-1788887174841",
+        "sender": "user",
+        "text": "Ok and which crop is best based on condition of today ie sep 8 2026",
+        "timestamp": "10:36 PM"
+      },
+      {
+        "id": "bot-1788887181394",
+        "sender": "aeris",
+        "text": "User Safety: safe",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Ahmedabad",
+          "tempRange": "26.4°C — 34.6°C",
+          "currentTemp": "29.3°C",
+          "rainProb": 20,
+          "windSpeed": "6.8 km/h WSW",
+          "humidity": "72%",
+          "riskLevel": "MODERATE",
+          "riskColor": "#10b981",
+          "personaAdvisory": {
+            "title": "CITIZEN DIRECTIVE",
+            "recommendation": "User Safety: safe...",
+            "metrics": [
+              {
+                "label": "Precipitation Risk",
+                "val": "20%"
+              },
+              {
+                "label": "Relative Humidity",
+                "val": "72%"
+              },
+              {
+                "label": "Operational Window",
+                "val": "Next 24-48 Hours"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "Atmospheric Moisture",
+                "detail": "Relative humidity is 72% with 20% precipitation probability."
+              },
+              {
+                "title": "NWP Model Integration",
+                "detail": "Cross-referenced with GFS/ECMWF Open-Meteo live ensemble data."
+              }
+            ]
+          },
+          "source": "OPEN_METEO_LIVE_NWP_ENSEMBLE",
+          "updated": "2026-09-08T17:06:21.392Z"
+        },
+        "timestamp": "10:36 PM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-08T17:05:34.648Z",
+    "updatedAt": "2026-09-08T17:06:21.394Z"
+  },
+  {
+    "id": "chat_1788887125148_37aug",
+    "title": "Should I add urea in crops in my rice crop...",
+    "messages": [
+      {
+        "id": "usr-1788887125143",
+        "sender": "user",
+        "text": "Should I add urea in crops in my rice crop in ahemdabad?",
+        "timestamp": "10:35 PM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-08T17:05:25.148Z",
+    "updatedAt": "2026-09-08T17:05:25.148Z"
+  },
+  {
     "id": "chat_1788886673846_qbv9j",
     "title": "Hello! Welcome to your WeatherGPT daily br...",
     "messages": [
