@@ -1,7 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
 const ChatContext = createContext(null);
+
+// Helper: get the current Supabase access token, or null if not signed in
+async function getAccessToken() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  } catch {
+    return null;
+  }
+}
 
 export function ChatProvider({ children }) {
   const { currentUser, isAuthenticated } = useAuth();
@@ -11,17 +22,22 @@ export function ChatProvider({ children }) {
 
   const userKey = currentUser?.email ? currentUser.email.toLowerCase() : 'guest';
 
-  // Load chats from backend & localStorage fallback
+  // Load chats from backend (authenticated) with localStorage fallback
   const fetchChats = useCallback(async () => {
     setIsLoadingChats(true);
     try {
-      const res = await fetch(`/api/chats?userEmail=${encodeURIComponent(userKey)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.chats)) {
-          setChats(data.chats);
-          localStorage.setItem(`aeris_chats_${userKey}`, JSON.stringify(data.chats));
-          return;
+      const token = await getAccessToken();
+      if (token) {
+        const res = await fetch('/api/chats', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.chats)) {
+            setChats(data.chats);
+            localStorage.setItem(`aeris_chats_${userKey}`, JSON.stringify(data.chats));
+            return;
+          }
         }
       }
     } catch (err) {
@@ -30,7 +46,7 @@ export function ChatProvider({ children }) {
       setIsLoadingChats(false);
     }
 
-    // Fallback to localStorage
+    // Fallback to localStorage (guest or unauthenticated)
     try {
       const local = localStorage.getItem(`aeris_chats_${userKey}`);
       if (local) {
@@ -103,12 +119,17 @@ export function ChatProvider({ children }) {
     });
   }, [activeChatId, userKey]);
 
-  // Save chat to backend
+  // Save chat to backend (authenticated) with silent local-only fallback
   const persistChat = async (chat) => {
     try {
+      const token = await getAccessToken();
+      if (!token) return; // unauthenticated — local storage only
       await fetch('/api/chats', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
         body: JSON.stringify(chat)
       });
     } catch (e) {
@@ -133,7 +154,12 @@ export function ChatProvider({ children }) {
     }
 
     try {
-      await fetch(`/api/chats/${chatId}`, { method: 'DELETE' });
+      const token = await getAccessToken();
+      if (!token) return; // unauthenticated — skip backend delete
+      await fetch(`/api/chats/${chatId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
     } catch (err) {
       console.warn('Failed to delete chat on backend:', err);
     }

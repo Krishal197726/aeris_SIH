@@ -13,6 +13,9 @@ import {
   getCoordinates,
   getWeatherByCoordinates
 } from './src/services/weatherBackendService.js';
+import { supabase } from './server/config/supabase.js';
+import { supabaseAuth, isSupabaseAuthConfigured } from './server/config/supabaseAuth.js';
+import { authGuard } from './server/middleware/authGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -347,41 +350,134 @@ app.get('/api/auth/google/callback', async (req, res) => {
  * ========================================================================= */
 
 // Check if email exists in database
-app.post('/api/auth/check-email', (req, res) => {
+app.post('/api/auth/check-email', async (req, res) => {
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // Check Supabase public.profiles if Supabase is configured
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      if (!error && profile) {
+        return res.json({ exists: true });
+      }
+    } catch (err) {
+      console.warn('[AERIS AUTH] check-email Supabase check error:', err.message);
+    }
+  }
+
+  // Fallback to legacy users.json
   const users = loadUsers();
-  const exists = users.some(u => u.email.toLowerCase() === email.trim().toLowerCase());
+  const exists = users.some(u => u.email.toLowerCase() === normalizedEmail);
   res.json({ exists });
 });
 
 // Search matching emails for first-letter auto-suggestion
-app.get('/api/auth/matching-emails', (req, res) => {
+app.get('/api/auth/matching-emails', async (req, res) => {
   const q = (req.query.q || '').trim().toLowerCase();
   if (!q) {
     return res.json({ matches: [] });
   }
 
-  const users = loadUsers();
-  const matches = users
-    .filter(u => u.email.toLowerCase().startsWith(q))
-    .map(u => u.email);
+  const matchesSet = new Set();
 
-  res.json({ matches });
+  // 1. Check Supabase public.profiles if configured
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .ilike('email', `${q}%`)
+        .limit(10);
+
+      if (!error && Array.isArray(profiles)) {
+        for (const p of profiles) {
+          if (p.email) matchesSet.add(p.email.toLowerCase());
+        }
+      }
+    } catch (err) {
+      console.warn('[AERIS AUTH] matching-emails Supabase query failed:', err.message);
+    }
+  }
+
+  // 2. Legacy users.json fallback/merge
+  try {
+    const users = loadUsers();
+    for (const u of users) {
+      if (u.email && u.email.toLowerCase().startsWith(q)) {
+        matchesSet.add(u.email.toLowerCase());
+      }
+    }
+  } catch (err) {
+    console.warn('[AERIS AUTH] matching-emails users.json read failed:', err.message);
+  }
+
+  res.json({ matches: Array.from(matchesSet).slice(0, 10) });
 });
 
 // User Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // 1. Primary path: Supabase Auth
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: authData, error: authError } = await supabaseAuth.auth.signInWithPassword({
+        email: normalizedEmail,
+        password
+      });
+
+      if (!authError && authData?.user && authData?.session) {
+        // Fetch user profile from public.profiles using privileged client
+        let profile = null;
+        try {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+          profile = profileRow;
+        } catch (profileErr) {
+          console.warn('[AERIS AUTH SERVER] Profile lookup failed, falling back to metadata:', profileErr.message);
+        }
+
+        const safeUser = {
+          id: authData.user.id,
+          name: profile?.name || authData.user.user_metadata?.name || normalizedEmail.split('@')[0],
+          email: authData.user.email || normalizedEmail,
+          role: profile?.role || authData.user.user_metadata?.role || 'Citizen',
+          avatarColor: profile?.avatar_color || authData.user.user_metadata?.avatar_color || 'from-emerald-500 to-teal-600'
+        };
+
+        return res.json({
+          success: true,
+          token: authData.session.access_token,
+          user: safeUser,
+          session: authData.session
+        });
+      }
+    } catch (err) {
+      console.warn('[AERIS AUTH SERVER] Supabase sign-in error, checking legacy fallback:', err.message);
+    }
+  }
+
+  // 2. Legacy fallback: users.json + bcrypt
   const users = loadUsers();
-  const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
+  const user = users.find(u => u.email.toLowerCase() === normalizedEmail);
 
   if (!user) {
     return res.status(404).json({ error: "User doesn't exist." });
@@ -401,7 +497,7 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // User Sign Up
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {
   const { name, email, password, role = 'Citizen' } = req.body;
 
   if (!name || !name.trim()) {
@@ -418,6 +514,68 @@ app.post('/api/auth/signup', (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   }
 
+  const avatar_color = 'from-emerald-500 to-teal-600';
+
+  // 1. Primary path: Supabase Auth
+  if (isSupabaseAuthConfigured) {
+    try {
+      const { data: authData, error: authError } = await supabaseAuth.auth.signUp({
+        email: normalizedEmail,
+        password,
+        options: {
+          data: {
+            name: name.trim(),
+            role,
+            avatar_color
+          }
+        }
+      });
+
+      if (authError) {
+        if (authError.status === 422 || authError.message?.toLowerCase().includes('already registered')) {
+          return res.status(409).json({ error: 'An account with this email address already exists.' });
+        }
+        return res.status(400).json({ error: authError.message || 'Registration failed.' });
+      }
+
+      if (authData?.user) {
+        // Query public.profiles row created by the database trigger
+        let profile = null;
+        try {
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+          profile = profileRow;
+        } catch (profileErr) {
+          console.warn('[AERIS AUTH SERVER] Profile lookup failed after signup:', profileErr.message);
+        }
+
+        const safeUser = {
+          id: authData.user.id,
+          name: profile?.name || authData.user.user_metadata?.name || name.trim(),
+          email: authData.user.email || normalizedEmail,
+          role: profile?.role || authData.user.user_metadata?.role || role,
+          avatarColor: profile?.avatar_color || authData.user.user_metadata?.avatar_color || avatar_color
+        };
+
+        const token = authData.session?.access_token || createSessionToken(safeUser);
+
+        return res.json({
+          success: true,
+          token,
+          user: safeUser,
+          session: authData.session || null
+        });
+      }
+    } catch (err) {
+      console.error('[AERIS AUTH SERVER] Supabase signup exception:', err);
+      return res.status(500).json({ error: 'Registration failed due to a server error. Please try again.' });
+    }
+  }
+
+  // 2. Legacy fallback: users.json + bcrypt (preserved per Task 3 instructions)
   const users = loadUsers();
   if (users.some(u => u.email.toLowerCase() === normalizedEmail)) {
     return res.status(409).json({ error: 'An account with this email address already exists.' });
@@ -633,84 +791,183 @@ app.post('/api/auth/forgot-password/reset-password', (req, res) => {
 });
 
 /* =========================================================================
- * 4. REAL USER CHAT PERSISTENCE ENDPOINTS
+ * 4. CHAT PERSISTENCE ENDPOINTS (Supabase-backed, authGuard protected)
  * ========================================================================= */
 
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-
-function loadChats() {
+// GET /api/chats — fetch all chat sessions for the authenticated user
+app.get('/api/chats', authGuard, async (req, res) => {
+  const userId = req.user.id;
   try {
-    if (!fs.existsSync(CHATS_FILE)) {
-      fs.writeFileSync(CHATS_FILE, JSON.stringify([], null, 2));
-      return [];
+    const { data: sessions, error } = await supabase
+      .from('chat_sessions')
+      .select('id, title, created_at, updated_at')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('[AERIS CHAT] GET /api/chats session query error:', error.message);
+      return res.status(500).json({ success: false, error: 'Failed to load chats.' });
     }
-    const data = fs.readFileSync(CHATS_FILE, 'utf-8');
-    return JSON.parse(data);
+
+    // For each session, fetch messages using the actual chat_messages column names
+    const chats = await Promise.all(
+      (sessions || []).map(async (session) => {
+        const { data: messages, error: msgError } = await supabase
+          .from('chat_messages')
+          .select('id, sender, text, card_data, sources, created_at')
+          .eq('session_id', session.id)
+          .order('created_at', { ascending: true });
+
+        if (msgError) {
+          console.error('[AERIS CHAT] GET message query error for session', session.id, ':', msgError.message);
+        }
+
+        return {
+          id: session.id,
+          title: session.title,
+          createdAt: session.created_at,
+          updatedAt: session.updated_at,
+          // Map DB columns → frontend-compatible message shape
+          // 'bot' in DB becomes 'aeris' for the frontend (ChatPage uses sender === 'aeris')
+          messages: (messages || []).map((m) => ({
+            id: m.id,
+            sender: m.sender === 'bot' ? 'aeris' : 'user',
+            text: m.text,
+            card: m.card_data ?? null,
+            sources: m.sources ?? null,
+            timestamp: m.created_at
+          }))
+        };
+      })
+    );
+
+    return res.json({ success: true, chats });
   } catch (err) {
-    console.error('Failed to load chats:', err);
-    return [];
+    console.error('[AERIS CHAT] GET /api/chats exception:', err);
+    return res.status(500).json({ success: false, error: 'Unexpected error loading chats.' });
   }
-}
-
-function saveChats(chats) {
-  try {
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2));
-  } catch (err) {
-    console.error('Failed to save chats:', err);
-  }
-}
-
-// Get user chats
-app.get('/api/chats', (req, res) => {
-  const userEmail = (req.query.userEmail || '').trim().toLowerCase();
-  const allChats = loadChats();
-  
-  if (userEmail) {
-    const userChats = allChats.filter(c => (c.userEmail || '').toLowerCase() === userEmail);
-    return res.json({ success: true, chats: userChats });
-  }
-
-  // If no email query, return guest/recent chats
-  const guestChats = allChats.filter(c => !c.userEmail || c.userEmail === 'guest');
-  res.json({ success: true, chats: guestChats });
 });
 
-// Save / Update a chat
-app.post('/api/chats', (req, res) => {
-  const { id, title, messages, userEmail = 'guest', createdAt, updatedAt } = req.body;
+// POST /api/chats — upsert a chat session and its messages
+app.post('/api/chats', authGuard, async (req, res) => {
+  const userId = req.user.id;
+  const { id, title, messages = [], createdAt, updatedAt } = req.body;
+
   if (!id || !title) {
     return res.status(400).json({ error: 'Chat ID and title are required.' });
   }
 
-  const allChats = loadChats();
-  const existingIdx = allChats.findIndex(c => c.id === id);
+  const now = new Date().toISOString();
 
-  const chatRecord = {
-    id,
-    title,
-    messages: messages || [],
-    userEmail: (userEmail || 'guest').toLowerCase(),
-    createdAt: createdAt || new Date().toISOString(),
-    updatedAt: updatedAt || new Date().toISOString()
-  };
+  try {
+    // Upsert session row
+    const { data: session, error: sessionError } = await supabase
+      .from('chat_sessions')
+      .upsert(
+        {
+          id,
+          user_id: userId,
+          title,
+          created_at: createdAt || now,
+          updated_at: updatedAt || now
+        },
+        { onConflict: 'id' }
+      )
+      .select()
+      .single();
 
-  if (existingIdx >= 0) {
-    allChats[existingIdx] = { ...allChats[existingIdx], ...chatRecord };
-  } else {
-    allChats.unshift(chatRecord);
+    if (sessionError) {
+      console.error('[AERIS CHAT] Session upsert error:', sessionError.message);
+      return res.status(500).json({ error: 'Failed to save chat session.' });
+    }
+
+    // Replace all messages for this session (delete + insert)
+    if (messages.length > 0) {
+      await supabase.from('chat_messages').delete().eq('session_id', id);
+
+      // Map to actual chat_messages schema columns:
+      //   sender TEXT CHECK (sender IN ('user', 'bot'))  — NOT 'role'/'assistant'
+      //   text   TEXT NOT NULL                           — NOT 'content'
+      //   card_data JSONB, sources JSONB
+      //   created_at: omitted so Postgres uses its DEFAULT NOW()
+      const rows = messages.map((m) => {
+        const senderValue = m.sender === 'user' ? 'user' : 'bot';
+        const row = {
+          session_id: id,
+          sender: senderValue,
+          text: m.text || m.content || ''
+        };
+        // Preserve card_data if present (weather cards, etc.)
+        if (m.card !== undefined && m.card !== null) {
+          row.card_data = m.card;
+        }
+        // Preserve sources if present
+        if (m.sources !== undefined && m.sources !== null) {
+          row.sources = m.sources;
+        }
+        // Do NOT use m.timestamp — it is a human-readable locale string ("03:42 pm"),
+        // which is not a valid TIMESTAMPTZ. Let Postgres use DEFAULT NOW() instead.
+        return row;
+      });
+
+      const { error: msgError } = await supabase.from('chat_messages').insert(rows);
+
+      if (msgError) {
+        console.error('[AERIS CHAT] Message insert failed:', msgError.message, '| code:', msgError.code);
+        return res.status(500).json({ error: 'Chat session saved but messages could not be stored.' });
+      }
+    }
+
+    return res.json({
+      success: true,
+      chat: {
+        id: session.id,
+        title: session.title,
+        createdAt: session.created_at,
+        updatedAt: session.updated_at
+      }
+    });
+  } catch (err) {
+    console.error('[AERIS CHAT] POST /api/chats exception:', err);
+    return res.status(500).json({ error: 'Unexpected error saving chat.' });
   }
-
-  saveChats(allChats);
-  res.json({ success: true, chat: chatRecord });
 });
 
-// Delete a chat
-app.delete('/api/chats/:id', (req, res) => {
+// DELETE /api/chats/:id — delete a chat session (and cascade messages)
+app.delete('/api/chats/:id', authGuard, async (req, res) => {
+  const userId = req.user.id;
   const { id } = req.params;
-  let allChats = loadChats();
-  allChats = allChats.filter(c => c.id !== id);
-  saveChats(allChats);
-  res.json({ success: true, message: 'Chat deleted.' });
+
+  try {
+    // Verify ownership before deleting
+    const { data: session, error: fetchError } = await supabase
+      .from('chat_sessions')
+      .select('id, user_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('[AERIS CHAT] DELETE ownership check error:', fetchError.message);
+      return res.status(500).json({ error: 'Failed to verify chat ownership.' });
+    }
+
+    if (!session) {
+      return res.status(404).json({ error: 'Chat not found.' });
+    }
+
+    if (session.user_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this chat.' });
+    }
+
+    // Delete messages first, then session
+    await supabase.from('chat_messages').delete().eq('session_id', id);
+    await supabase.from('chat_sessions').delete().eq('id', id);
+
+    return res.json({ success: true, message: 'Chat deleted.' });
+  } catch (err) {
+    console.error('[AERIS CHAT] DELETE /api/chats/:id exception:', err);
+    return res.status(500).json({ error: 'Unexpected error deleting chat.' });
+  }
 });
 
 /* =========================================================================
@@ -806,35 +1063,45 @@ app.get('/api/locations/search', async (req, res) => {
  * 5. SYSTEM HEALTH & SESSION UTILITIES
  * ========================================================================= */
 
-// Verify session and get authenticated user
-app.get('/api/auth/me', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: 'No authorization token provided.' });
-  }
-
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  if (!token) {
-    return res.status(401).json({ error: 'Empty authorization token.' });
-  }
-
+// Verify session and get authenticated user (Supabase Auth via authGuard)
+app.get('/api/auth/me', authGuard, async (req, res) => {
   try {
-    const decoded = jwt.verify(token, SESSION_SECRET);
-    const users = loadUsers();
-    const user = users.find(u => u.id === decoded.id || u.email.toLowerCase() === decoded.email?.toLowerCase());
-    if (!user) {
-      return res.status(401).json({ error: 'User no longer exists.' });
+    const authUser = req.user;
+    if (!authUser || !authUser.id) {
+      return res.status(401).json({ error: 'User session is invalid.' });
     }
-    return res.json({ success: true, user: sanitizeUser(user) });
-  } catch (err) {
-    // If fallback opaque token format
-    if (token.startsWith('aeris_tok_')) {
-      const users = loadUsers();
-      if (users.length > 0) {
-        return res.json({ success: true, user: sanitizeUser(users[0]) });
+
+    // Query public.profiles using privileged Supabase client
+    let profile = null;
+    try {
+      const { data: profileRow, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn('[AERIS AUTH SERVER] Profile lookup warning in /api/auth/me:', profileError.message);
+      } else {
+        profile = profileRow;
       }
+    } catch (err) {
+      console.warn('[AERIS AUTH SERVER] Exception querying profiles in /api/auth/me:', err.message);
     }
-    return res.status(401).json({ error: 'Session expired or invalid.' });
+
+    // Map to the canonical frontend user shape
+    const safeUser = {
+      id: authUser.id,
+      name: profile?.name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+      email: authUser.email,
+      role: profile?.role || authUser.user_metadata?.role || 'Citizen',
+      avatarColor: profile?.avatar_color || authUser.user_metadata?.avatar_color || 'from-emerald-500 to-teal-600'
+    };
+
+    return res.json({ success: true, user: safeUser });
+  } catch (err) {
+    console.error('[AERIS AUTH SERVER] Unexpected error in /api/auth/me:', err);
+    return res.status(500).json({ error: 'Failed to retrieve authenticated user profile.' });
   }
 });
 
