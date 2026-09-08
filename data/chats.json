@@ -1,0 +1,237 @@
+[
+  {
+    "id": "chat_1788726686290_vmw0j",
+    "title": "AERIS (WeatherGPT) is your real‑time meteo...",
+    "messages": [
+      {
+        "id": "bot-1788726686290",
+        "sender": "aeris",
+        "text": "AERIS (WeatherGPT) is your real‑time meteorological assistant for Franz Josef, New Zealand. Based on the latest data, it’s partly cloudy with a temperature of 10.3 °C and only a 10 % chance of rain, so you can plan outdoor activities with minimal weather concern.",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Franz Josef",
+          "tempRange": "7.1°C — 13.6°C",
+          "currentTemp": "10.3°C",
+          "rainProb": 10,
+          "windSpeed": "7.7 km/h SSE",
+          "humidity": "62%",
+          "riskLevel": "LOW",
+          "riskColor": "#10b981",
+          "personaAdvisory": {
+            "title": "CITIZEN ADVISORY DIRECTIVE",
+            "recommendation": "Dress in layers; a light jacket is enough. No umbrella needed unless you prefer extra caution.",
+            "metrics": [
+              {
+                "label": "Current Temperature",
+                "val": "10.3°C"
+              },
+              {
+                "label": "Rain Probability",
+                "val": "10%"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "Low Rain Chance",
+                "detail": "Precipitation probability is only 10 %, indicating minimal rain risk."
+              },
+              {
+                "title": "Cool Temperatures",
+                "detail": "Current temperature is 10.3 °C with a daily high of 13.6 °C, reducing heat‑related discomfort."
+              }
+            ]
+          },
+          "source": "OPEN_METEO_LIVE_NWP_ENSEMBLE",
+          "updated": "2026-09-06T20:31:04.578Z"
+        },
+        "timestamp": "02:01 AM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-06T20:31:26.290Z",
+    "updatedAt": "2026-09-06T20:31:26.290Z"
+  },
+  {
+    "id": "chat_1788726662979_1uy5i",
+    "title": "Who's this api talking to me?",
+    "messages": [
+      {
+        "id": "usr-1788726662978",
+        "sender": "user",
+        "text": "Who's this api talking to me?",
+        "timestamp": "02:01 AM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-06T20:31:02.979Z",
+    "updatedAt": "2026-09-06T20:31:02.979Z"
+  },
+  {
+    "id": "chat_1788726614733_z2wmo",
+    "title": "The weather in Gujarat State, India shows...",
+    "messages": [
+      {
+        "id": "bot-1788726614732",
+        "sender": "aeris",
+        "text": "The weather in Gujarat State, India shows mainly clear conditions with warm temperatures around 25°C. It's quite humid at 82% with light winds from the west-southwest at 13.7 km/h. Rain chances are very low at just 2%, making it a good day for outdoor activities. However, the high humidity may make it feel warmer than the actual temperature, so stay hydrated and consider light, breathable clothing. The evening and early morning hours will be slightly cooler around 24°C, perfect for evening walks or outdoor dining.",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Gujarat State, India",
+          "tempRange": "24°C — 31°C",
+          "currentTemp": "25°C",
+          "rainProb": 2,
+          "windSpeed": "13.7 km/h WSW",
+          "humidity": "82%",
+          "riskLevel": "MODERATE",
+          "riskColor": "#f59e0b",
+          "personaAdvisory": {
+            "title": "CITIZEN ADVISORY DIRECTIVE",
+            "recommendation": "Enjoy outdoor activities with light, breathable clothing. The low rain probability (2%) means you likely won't need an umbrella, but the high humidity (82%) will make it feel warmer, so stay hydrated and seek shade during peak heat hours. Evening walks are pleasant with temperatures dropping to around 24°C.",
+            "metrics": [
+              {
+                "label": "Temperature",
+                "val": "25°C (feels like 27.7°C)"
+              },
+              {
+                "label": "Humidity",
+                "val": "82%"
+              },
+              {
+                "label": "Rain Probability",
+                "val": "2%"
+              },
+              {
+                "label": "Wind",
+                "val": "13.7 km/h WSW"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "High Humidity Impact",
+                "detail": "82% humidity combined with 25°C temperature creates moderate discomfort risk, making it feel warmer than actual temperature and potentially causing sticky conditions."
+              }
+            ]
+          },
+          "source": "OPEN_METEO_LIVE_NWP_ENSEMBLE",
+          "updated": "2026-09-06T20:30:09.868Z"
+        },
+        "timestamp": "02:00 AM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-06T20:30:14.733Z",
+    "updatedAt": "2026-09-06T20:30:14.733Z"
+  },
+  {
+    "id": "chat_1788726606436_qmmll",
+    "title": "Weather in Raysan Gujarat?",
+    "messages": [
+      {
+        "id": "usr-1788726606410",
+        "sender": "user",
+        "text": "Weather in Raysan Gujarat?",
+        "timestamp": "02:00 AM"
+      }
+    ],
+    "userEmail": "guest",
+    "createdAt": "2026-09-06T20:30:06.436Z",
+    "updatedAt": "2026-09-06T20:30:06.436Z"
+  },
+  {
+    "id": "chat_1788371611647_wdbbs",
+    "title": "Ahmedabad Weather Intelligence: Deep moist...",
+    "messages": [
+      {
+        "id": "bot-1788371611646",
+        "sender": "aeris",
+        "text": "Ahmedabad Weather Intelligence: Deep moisture inflow from the Northeast Arabian Sea is driving convective cloud bands inland. Expected precipitation probability is 78% with moderate to heavy spells during late afternoon.",
+        "card": {
+          "type": "METEOROLOGICAL_COMMAND_CARD",
+          "location": "Ahmedabad, Gujarat (23.02° N, 72.57° E)",
+          "tempRange": "24°C — 31°C",
+          "currentTemp": "29°C",
+          "rainProb": 78,
+          "windSpeed": "18 km/h WSW",
+          "humidity": "82%",
+          "riskLevel": "MODERATE TO HIGH",
+          "riskColor": "#f59e0b",
+          "personaAdvisory": {
+            "title": "CITIZEN MOBILITY ADVISORY",
+            "recommendation": "Rain is likely tomorrow evening in Ahmedabad after 4:00 PM. Peak intensity expected between 5:00 PM and 7:30 PM. Carry rain protection and consider scheduling outdoor commutes or market trips prior to late afternoon.",
+            "metrics": [
+              {
+                "label": "Precipitation Prob.",
+                "val": "78%"
+              },
+              {
+                "label": "Expected Window",
+                "val": "4 PM – 8 PM"
+              },
+              {
+                "label": "Rain Volume",
+                "val": "25 – 40 mm"
+              },
+              {
+                "label": "UV Index",
+                "val": "6 (Moderate)"
+              }
+            ]
+          },
+          "whyThisRisk": {
+            "factors": [
+              {
+                "title": "78% Precipitation Probability",
+                "detail": "Ensemble agreement across ECMWF, GFS, and WRF 3km high-resolution runs confirms heavy convective moisture convergence."
+              },
+              {
+                "title": "Increasing Wind & Squall Dynamics",
+                "detail": "Surface winds accelerating from 14 km/h to gust peaks of 42 km/h during convective downdrafts."
+              },
+              {
+                "title": "Atmospheric Instability (CAPE > 2,400 J/kg)",
+                "detail": "High thermal lapse rates and Gulf of Khambhat moisture flux creating strong vertical thunderstorm updrafts."
+              },
+              {
+                "title": "Official Multi-Agency Cross-Check",
+                "detail": "IMD Doppler Radar Bhuj/Ahmedabad reflectivity > 45 dBZ verified against INSAT-3DR infrared sounders."
+              }
+            ],
+            "nwpModels": [
+              "IMD HRRR v4.2",
+              "GFS 0.25°",
+              "ECMWF IFS",
+              "WRF-AERIS Meso 3km"
+            ],
+            "synopticSource": "IMD Coastal Radar Network & AERIS Rapid Warning System",
+            "timestamp": "14:32 IST (Live Telemetry Sync)"
+          },
+          "source": "IMD • GFS • WRF • AERIS Ensemble v4.1",
+          "updated": "14:32 IST"
+        },
+        "timestamp": "11:23 pm"
+      }
+    ],
+    "userEmail": "vanshiklakkad5@gmail.com",
+    "createdAt": "2026-09-02T17:53:31.647Z",
+    "updatedAt": "2026-09-02T17:53:31.647Z"
+  },
+  {
+    "id": "chat_1788371609607_u8z8q",
+    "title": "tell me about ahmedabad",
+    "messages": [
+      {
+        "id": "usr-1788371609597",
+        "sender": "user",
+        "text": "tell me about ahmedabad",
+        "timestamp": "11:23 pm"
+      }
+    ],
+    "userEmail": "vanshiklakkad5@gmail.com",
+    "createdAt": "2026-09-02T17:53:29.606Z",
+    "updatedAt": "2026-09-02T17:53:29.606Z"
+  }
+]
