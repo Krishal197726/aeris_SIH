@@ -10,8 +10,29 @@ import { Router } from 'express';
 import { isOpenRouterConfigured } from '../config/openrouter.js';
 import { generateChatResponse } from '../services/openRouterService.js';
 import { getWeather, getCoordinates } from '../../src/services/weatherBackendService.js';
+import { CROP_DATABASE, evaluateDiseaseRisk, calculateIrrigationAdvisory } from '../services/cropService.js';
 
 const router = Router();
+
+/**
+ * Detect mentioned crop from user query
+ */
+function detectCropFromMessage(text = '', fallback = null) {
+  if (!text) return fallback;
+  const lower = text.toLowerCase();
+  for (const key of Object.keys(CROP_DATABASE)) {
+    const crop = CROP_DATABASE[key];
+    if (lower.includes(crop.id) || lower.includes(crop.cropName.toLowerCase())) {
+      return crop.id;
+    }
+  }
+  if (lower.includes('peanut')) return 'groundnut';
+  if (lower.includes('paddy')) return 'rice';
+  if (lower.includes('corn')) return 'maize';
+  if (lower.includes('cane')) return 'sugarcane';
+  if (lower.includes('sarson')) return 'mustard';
+  return fallback;
+}
 
 /**
  * Extract target location query from explicit location payload or natural language message.
@@ -144,6 +165,35 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // 4.5. Optional crop context enrichment (if cropId specified or persona is farmer or crop mentioned)
+    let cropProfile = null;
+    const { cropId } = req.body || {};
+    const detectedCropId = cropId || detectCropFromMessage(message.trim(), (persona || '').toLowerCase() === 'farmer' ? 'cotton' : null);
+    
+    if (detectedCropId) {
+      const baseCrop = CROP_DATABASE[detectedCropId];
+      if (baseCrop) {
+        const diseaseAssessment = evaluateDiseaseRisk(detectedCropId, weatherData);
+        const irrigationAssessment = calculateIrrigationAdvisory({
+          cropId: detectedCropId,
+          stageIndex: 2,
+          tempMax: weatherData.forecast?.[0]?.tempMax || (weatherData.current?.temperature + 4) || 32,
+          tempMin: weatherData.forecast?.[0]?.tempMin || (weatherData.current?.temperature - 4) || 24,
+          forecastedRain24h: weatherData.current?.precipitation || 0,
+          forecastedRain48h: weatherData.forecast?.[1]?.precipitation || 0,
+          latitude: weatherData.location.latitude
+        });
+
+        cropProfile = {
+          ...baseCrop,
+          liveMlAssessments: {
+            diseaseRisk: diseaseAssessment,
+            irrigationAdvisory: irrigationAssessment
+          }
+        };
+      }
+    }
+
     // 5. Generate AI response via OpenRouter Service with live Open-Meteo telemetry
     const chatResponse = await generateChatResponse({
       message: message.trim(),
@@ -151,7 +201,7 @@ router.post('/', async (req, res) => {
       persona: persona || 'citizen',
       location: weatherData.location,
       weather: weatherData,
-      crop: null,
+      crop: cropProfile,
       alerts: []
     });
 

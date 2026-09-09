@@ -19,7 +19,8 @@ import {
   Sparkles,
   Shield,
   Trash2,
-  MessageSquare
+  MessageSquare,
+  Sprout
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useChat } from '../../context/ChatContext';
@@ -168,6 +169,25 @@ export default function Sidebar({
         >
           <Cpu className="w-4 h-4 text-[#ececec] shrink-0" />
           <span>Weather Map</span>
+        </NavLink>
+
+        {/* Crop Intelligence */}
+        <NavLink
+          to="/crops"
+          onClick={onCloseMobile}
+          className={({ isActive }) =>
+            `flex items-center justify-between px-3 py-2 rounded-xl transition-colors text-left text-sm ${
+              isActive ? 'bg-[#212121] text-emerald-300 font-medium' : 'text-[#ececec] hover:bg-[#212121]'
+            }`
+          }
+        >
+          <div className="flex items-center gap-3">
+            <Sprout className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>Crop Intelligence</span>
+          </div>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            ML
+          </span>
         </NavLink>
 
         {/* Climate Intelligence */}

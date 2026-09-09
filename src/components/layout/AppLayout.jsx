@@ -26,7 +26,7 @@ export default function AppLayout() {
         />
 
         {/* Dynamic Route Content */}
-        <main className="flex-1 overflow-hidden relative">
+        <main className="flex-1 overflow-y-auto relative">
           <Outlet />
         </main>
       </div>

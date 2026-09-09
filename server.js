@@ -17,6 +17,7 @@ import { supabase } from './server/config/supabase.js';
 import { supabaseAuth, isSupabaseAuthConfigured } from './server/config/supabaseAuth.js';
 import { authGuard } from './server/middleware/authGuard.js';
 import chatRouter from './server/routes/chat.js';
+import cropsRouter from './server/routes/crops.js';
 import { isOpenRouterConfigured } from './server/config/openrouter.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1066,6 +1067,7 @@ app.get('/api/locations/search', async (req, res) => {
  * ========================================================================= */
 
 app.use('/api/chat', chatRouter);
+app.use('/api/crops', cropsRouter);
 
 /* =========================================================================
  * 5. SYSTEM HEALTH & SESSION UTILITIES

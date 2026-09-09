@@ -6,6 +6,7 @@ import MapPage from './pages/MapPage';
 import AlertsPage from './pages/AlertsPage';
 import ClimatePage from './pages/ClimatePage';
 import LibraryPage from './pages/LibraryPage';
+import CropIntelligencePage from './pages/CropIntelligencePage';
 import SettingsPage from './pages/SettingsPage';
 import AuthModal from './components/auth/AuthModal';
 import { PersonaProvider } from './context/PersonaContext';
@@ -23,6 +24,7 @@ export default function App() {
               <Route path="/" element={<AppLayout />}>
                 <Route index element={<ChatPage />} />
                 <Route path="chat" element={<ChatPage />} />
+                <Route path="crops" element={<CropIntelligencePage />} />
                 <Route path="map" element={<MapPage />} />
                 <Route path="alerts" element={<AlertsPage />} />
                 <Route path="climate" element={<ClimatePage />} />
