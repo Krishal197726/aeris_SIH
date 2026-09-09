@@ -7,7 +7,7 @@
  */
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-export const DEFAULT_OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-latest';
+export const DEFAULT_OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
 
 /**
  * Check if the OpenRouter API key is configured.

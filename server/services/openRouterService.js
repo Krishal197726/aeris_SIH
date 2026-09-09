@@ -370,58 +370,6 @@ export async function generateChatResponse({
   const latitude = typeof latVal === 'number' ? latVal : (latVal ? parseFloat(latVal) : null);
   const longitude = typeof lngVal === 'number' ? lngVal : (lngVal ? parseFloat(lngVal) : null);
 
-  const config = getOpenRouterConfig();
-  const systemPrompt = buildSystemPrompt({ persona, location, weather, crop, alerts, riskAssessment });
-
-  const requestPayload = {
-    model: config.model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: message.trim() }
-    ],
-    temperature: 0.2,
-    response_format: { type: 'json_object' }
-  };
-
-  let response;
-  try {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: config.headers,
-      body: JSON.stringify(requestPayload),
-      signal: AbortSignal.timeout(120000)
-    });
-  } catch (netErr) {
-    console.error('[OpenRouter Service] Network connection error:', netErr.message);
-    const err = new Error('Failed to connect to OpenRouter API service: ' + netErr.message);
-    err.code = 'OPENROUTER_NETWORK_ERROR';
-    err.status = 502;
-    throw err;
-  }
-
-  if (!response.ok) {
-    let errBody = '';
-    try {
-      errBody = await response.text();
-    } catch (_) {}
-    console.error(`[OpenRouter Service] HTTP error ${response.status}:`, errBody.slice(0, 200));
-    
-    const err = new Error(`OpenRouter model provider returned status ${response.status}.`);
-    err.code = 'OPENROUTER_API_ERROR';
-    err.status = response.status >= 500 ? 502 : 400;
-    throw err;
-  }
-
-  const completionData = await response.json();
-  const rawContent = completionData?.choices?.[0]?.message?.content;
-
-  if (!rawContent || !rawContent.trim()) {
-    const err = new Error('OpenRouter returned an empty response.');
-    err.code = 'OPENROUTER_EMPTY_RESPONSE';
-    err.status = 502;
-    throw err;
-  }
-
   const locName = weather?.location?.name
     ? `${weather.location.name}${weather.location.state ? `, ${weather.location.state}` : ''}`
     : (location?.name || 'Requested Location');
@@ -434,21 +382,70 @@ export async function generateChatResponse({
     ? `${weather.forecast[0].tempMin}°C — ${weather.forecast[0].tempMax}°C`
     : `${currentTempNum - 3}°C — ${currentTempNum + 4}°C`;
   const weatherSource = weather.source || 'Open-Meteo Meteorological Service';
+  const conditionStr = weather.current?.description || weather.current?.condition || 'Fair conditions';
 
-  // Defensive JSON parsing
-  let parsed = null;
+  // 3. Attempt OpenRouter LLM call
+  let rawContent = null;
   try {
-    const cleaned = cleanJsonOutput(rawContent);
-    parsed = JSON.parse(cleaned);
-  } catch (parseErr) {
-    console.warn('[OpenRouter Service] Non-JSON LLM output received, formatting with live Open-Meteo telemetry:', parseErr.message);
-    const cleanedText = rawContent
-      .replace(/User Safety:\s*\w+/gi, '')
-      .replace(/```(?:json)?/gi, '')
-      .trim();
+    const config = getOpenRouterConfig();
+    const systemPrompt = buildSystemPrompt({ persona, location, weather, crop, alerts, riskAssessment });
+
+    const requestPayload = {
+      model: config.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message.trim() }
+      ],
+      temperature: 0.2,
+      response_format: { type: 'json_object' }
+    };
+
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: config.headers,
+      body: JSON.stringify(requestPayload),
+      signal: AbortSignal.timeout(12000)
+    });
+
+    if (response.ok) {
+      const completionData = await response.json();
+      rawContent = completionData?.choices?.[0]?.message?.content || null;
+    } else {
+      let errText = '';
+      try { errText = await response.text(); } catch (_) {}
+      console.warn(`[OpenRouter Service] Provider returned status ${response.status}: ${errText.slice(0, 150)}. Using live Open-Meteo telemetry fallback.`);
+    }
+  } catch (err) {
+    console.warn(`[OpenRouter Service] OpenRouter API call failed (${err.message}). Using live Open-Meteo telemetry fallback.`);
+  }
+
+  // 4. Defensive JSON parsing or live Open-Meteo telemetry fallback construction
+  let parsed = null;
+  if (rawContent && rawContent.trim()) {
+    try {
+      const cleaned = cleanJsonOutput(rawContent);
+      parsed = JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.warn('[OpenRouter Service] Non-JSON LLM output received, formatting with live Open-Meteo telemetry:', parseErr.message);
+    }
+  }
+
+  if (!parsed || !parsed.text || !parsed.card) {
+    const personaTitle = `${persona.toUpperCase()} ADVISORY DIRECTIVE`;
+    let personaRec = `Current conditions in ${locName}: ${conditionStr} at ${currentTempNum}°C with ${humidityStr} humidity. Exercise standard situational awareness based on live telemetry.`;
+
+    if (persona.toLowerCase() === 'farmer') {
+      if (crop?.cropName) {
+        personaRec = `${crop.cropName} in ${locName}: Ambient temperature is ${currentTempNum}°C with ${humidityStr} relative humidity and ${rainProbNum}% rain probability. ${crop.liveMlAssessments?.irrigationAdvisory?.irrigationDecision?.rationale || 'Monitor root-zone moisture.'}`;
+      } else {
+        personaRec = `Agricultural advisory for ${locName}: Current temperature is ${currentTempNum}°C with ${humidityStr} relative humidity and ${rainProbNum}% rain probability. ${riskAssessment.level === 'HIGH RISK' ? 'Suspend spraying operations during high humidity/rain windows.' : 'Optimal conditions for routine field operations.'}`;
+      }
+    } else if (persona.toLowerCase() === 'disaster') {
+      personaRec = `Emergency Response Bulletin for ${locName}: ${riskAssessment.level} assessed. Wind speed ${windStr}, precipitation probability ${rainProbNum}%. Monitor drainage and local bulletins.`;
+    }
 
     parsed = {
-      text: cleanedText || `Currently in ${locName}, the temperature is ${currentTempNum}°C with ${weather.current?.condition || 'clear skies'}, ${humidityStr} humidity, and wind speeds around ${windStr}.`,
+      text: `Currently in ${locName}, the temperature is ${currentTempNum}°C with ${conditionStr}, relative humidity at ${humidityStr}, and wind speeds around ${windStr}. Live atmospheric risk is evaluated as ${riskAssessment.level} (${riskAssessment.label}).`,
       card: {
         type: 'METEOROLOGICAL_COMMAND_CARD',
         location: locName,
@@ -463,25 +460,26 @@ export async function generateChatResponse({
         riskColor: riskAssessment.color,
         riskLabel: riskAssessment.label,
         personaAdvisory: {
-          title: `${persona.toUpperCase()} DIRECTIVE`,
-          recommendation: `Current conditions in ${locName}: ${weather.current?.description || weather.current?.condition || 'Fair conditions'}. Exercise standard situational awareness.`,
+          title: personaTitle,
+          recommendation: personaRec,
           metrics: [
             { label: 'Current Temp', val: `${currentTempNum}°C` },
-            { label: 'Humidity', val: humidityStr }
+            { label: 'Humidity', val: humidityStr },
+            { label: 'Rain Probability', val: `${rainProbNum}%` },
+            { label: 'Wind Velocity', val: windStr }
           ]
         },
         whyThisRisk: {
           factors: riskAssessment.factors
         },
-        source: weatherSource,
+        source: `${weatherSource} (Live Telemetry)`,
         updated: weather.timestamp || new Date().toISOString()
       },
       sources: [weatherSource]
     };
   }
 
-  // Validate & normalize fields according to ARCHITECTURE.md Section 7.1 contract
-  // Ensure deterministic risk and real Open-Meteo coordinates are strictly preserved
+  // 5. Validate & normalize fields according to ARCHITECTURE.md Section 7.1 contract
   const normalizedResponse = {
     text: parsed.text || 'No detailed advisory generated.',
     card: {
@@ -512,7 +510,6 @@ export async function generateChatResponse({
     sources: Array.isArray(parsed.sources) ? parsed.sources : [weatherSource]
   };
 
-  // Exactly match ARCHITECTURE.md Section 7.1 POST /api/chat success response contract
   return {
     success: true,
     conversationId: conversationId,

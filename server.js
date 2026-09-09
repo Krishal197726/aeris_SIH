@@ -1141,7 +1141,7 @@ app.get('/api/health', (req, res) => {
       },
       openRouter: {
         configured: isOpenRouterConfigured(),
-        model: process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-latest'
+        model: process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free'
       }
     }
   });

@@ -281,7 +281,7 @@ CRITICAL: Return ONLY valid JSON:
       headers: config.headers,
       signal: controller.signal,
       body: JSON.stringify({
-        model: config.model || 'openrouter/free',
+        model: config.model || 'google/gemma-4-31b-it:free',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: customQuery || `Provide agricultural diagnosis for ${crop.cropName} in ${locName}.` }
