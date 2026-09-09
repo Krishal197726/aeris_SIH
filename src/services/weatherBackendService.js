@@ -16,37 +16,6 @@ function getCacheTTL() {
 }
 
 /**
- * Normalized Indian Cities Geocoding Fallback Dictionary
- * Ensures instant, zero-latency geocoding for major Indian cities.
- */
-const INDIAN_CITIES_GEOCODING_MAP = {
-  'ahmedabad': { name: 'Ahmedabad', district: 'Ahmedabad', state: 'Gujarat', country: 'India', latitude: 23.0225, longitude: 72.5714 },
-  'surat': { name: 'Surat', district: 'Surat', state: 'Gujarat', country: 'India', latitude: 21.1702, longitude: 72.8311 },
-  'vadodara': { name: 'Vadodara', district: 'Vadodara', state: 'Gujarat', country: 'India', latitude: 22.3072, longitude: 73.1812 },
-  'baroda': { name: 'Vadodara', district: 'Vadodara', state: 'Gujarat', country: 'India', latitude: 22.3072, longitude: 73.1812 },
-  'rajkot': { name: 'Rajkot', district: 'Rajkot', state: 'Gujarat', country: 'India', latitude: 22.3039, longitude: 70.8022 },
-  'bhavnagar': { name: 'Bhavnagar', district: 'Bhavnagar', state: 'Gujarat', country: 'India', latitude: 21.7645, longitude: 72.1519 },
-  'jamnagar': { name: 'Jamnagar', district: 'Jamnagar', state: 'Gujarat', country: 'India', latitude: 22.4707, longitude: 70.0577 },
-  'junagadh': { name: 'Junagadh', district: 'Junagadh', state: 'Gujarat', country: 'India', latitude: 21.5222, longitude: 70.4579 },
-  'gandhinagar': { name: 'Gandhinagar', district: 'Gandhinagar', state: 'Gujarat', country: 'India', latitude: 23.2156, longitude: 72.6369 },
-  'mumbai': { name: 'Mumbai', district: 'Mumbai Suburban', state: 'Maharashtra', country: 'India', latitude: 19.0760, longitude: 72.8777 },
-  'pune': { name: 'Pune', district: 'Pune', state: 'Maharashtra', country: 'India', latitude: 18.5204, longitude: 73.8567 },
-  'nagpur': { name: 'Nagpur', district: 'Nagpur', state: 'Maharashtra', country: 'India', latitude: 21.1458, longitude: 79.0882 },
-  'delhi': { name: 'New Delhi', district: 'New Delhi', state: 'Delhi', country: 'India', latitude: 28.6139, longitude: 77.2090 },
-  'new delhi': { name: 'New Delhi', district: 'New Delhi', state: 'Delhi', country: 'India', latitude: 28.6139, longitude: 77.2090 },
-  'bengaluru': { name: 'Bengaluru', district: 'Bengaluru Urban', state: 'Karnataka', country: 'India', latitude: 12.9716, longitude: 77.5946 },
-  'bangalore': { name: 'Bengaluru', district: 'Bengaluru Urban', state: 'Karnataka', country: 'India', latitude: 12.9716, longitude: 77.5946 },
-  'chennai': { name: 'Chennai', district: 'Chennai', state: 'Tamil Nadu', country: 'India', latitude: 13.0827, longitude: 80.2707 },
-  'kolkata': { name: 'Kolkata', district: 'Kolkata', state: 'West Bengal', country: 'India', latitude: 22.5726, longitude: 88.3639 },
-  'hyderabad': { name: 'Hyderabad', district: 'Hyderabad', state: 'Telangana', country: 'India', latitude: 17.3850, longitude: 78.4867 },
-  'jaipur': { name: 'Jaipur', district: 'Jaipur', state: 'Rajasthan', country: 'India', latitude: 26.9124, longitude: 75.7873 },
-  'lucknow': { name: 'Lucknow', district: 'Lucknow', state: 'Uttar Pradesh', country: 'India', latitude: 26.8467, longitude: 80.9462 },
-  'bhopal': { name: 'Bhopal', district: 'Bhopal', state: 'Madhya Pradesh', country: 'India', latitude: 23.2599, longitude: 77.4126 },
-  'patna': { name: 'Patna', district: 'Patna', state: 'Bihar', country: 'India', latitude: 25.5941, longitude: 85.1376 },
-  'chandigarh': { name: 'Chandigarh', district: 'Chandigarh', state: 'Chandigarh', country: 'India', latitude: 30.7333, longitude: 76.7794 }
-};
-
-/**
  * WMO Weather Interpretation Codes to Human Readable Conditions
  */
 function decodeWMOCode(code) {
@@ -112,54 +81,196 @@ function degreesToCompass(deg) {
 }
 
 /**
- * 1. Geocoding Service: Name -> Coordinates
+ * 1. Fully Generic Geocoding Service: Name -> Coordinates
+ * Uses Open-Meteo Geocoding API as the PRIMARY, NORMAL and ONLY source of coordinates for arbitrary user-provided locations.
+ * Supports arbitrary cities, states/provinces, districts/regions, countries, and multi-word names worldwide without any hardcoded dictionary.
  */
 export async function getCoordinates(locationQuery) {
   if (!locationQuery || typeof locationQuery !== 'string') return null;
 
-  const cleanQuery = locationQuery.trim().toLowerCase().replace(/,?\s*india$/i, '').trim();
+  const cleanQuery = locationQuery
+    .trim()
+    .replace(/^(?:the|a|an)\s+/i, '')
+    .replace(/[?!.,;:()[\]{}"']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   if (!cleanQuery) return null;
 
-  // Check Indian cities dictionary first
-  if (INDIAN_CITIES_GEOCODING_MAP[cleanQuery]) {
-    return INDIAN_CITIES_GEOCODING_MAP[cleanQuery];
-  }
+  const fetchFn = getFetch();
 
-  // Check partial key match in fallback map
-  for (const [key, cityObj] of Object.entries(INDIAN_CITIES_GEOCODING_MAP)) {
-    if (cleanQuery.includes(key) || key.includes(cleanQuery)) {
-      return cityObj;
-    }
-  }
-
-  // Call Open-Meteo Geocoding API
-  try {
-    const fetchFn = getFetch();
-    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationQuery)}&count=5&language=en&format=json`;
-    const res = await fetchFn(url);
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    if (!data || !Array.isArray(data.results) || data.results.length === 0) {
-      return null;
-    }
-
-    // Prefer Indian location match
-    const indiaMatch = data.results.find(r => (r.country_code || '').toUpperCase() === 'IN' || (r.country || '').toLowerCase() === 'india');
-    const target = indiaMatch || data.results[0];
-
-    return {
-      name: target.name,
-      district: target.admin2 || target.admin1 || target.name,
-      state: target.admin1 || 'India',
-      country: target.country || 'India',
-      latitude: parseFloat(target.latitude),
-      longitude: parseFloat(target.longitude)
+  // Helper to log and return standardized location object with clear SOURCE instrumentation
+  const formatLocation = (name, district, state, country, lat, lng) => {
+    const loc = {
+      name: name,
+      district: district || name,
+      state: state || country || 'Global',
+      country: country || 'Global',
+      latitude: parseFloat(lat),
+      longitude: parseFloat(lng),
+      source: 'OPEN_METEO_GEOCODING'
     };
+    console.log(`[GEOCODING RESOLUTION] Location: "${locationQuery}" -> Resolved: "${loc.name}" (${loc.latitude}, ${loc.longitude}) | SOURCE = ${loc.source}`);
+    return loc;
+  };
+
+  // Strategy 1: Direct Open-Meteo Geocoding Search
+  let directResults = [];
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanQuery)}&count=15&language=en&format=json`;
+    const res = await fetchFn(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.results)) {
+        directResults = data.results;
+      }
+    }
   } catch (err) {
-    console.error(`[AERIS GEOCODING ERROR] Geocoding lookup failed for query "${locationQuery}":`, err.message);
-    return null;
+    console.error(`[AERIS GEOCODING ERROR] Direct Open-Meteo lookup failed for "${cleanQuery}":`, err.message);
   }
+
+  // 1a. Major city exact match with significant population (e.g. Ahmedabad, Mumbai, Tokyo, London, Paris, New York)
+  const exactMajorCity = directResults.find(r => 
+    r.name.toLowerCase() === cleanQuery.toLowerCase() && (r.population >= 50000 || (r.country_code === 'IN' && r.population > 10000))
+  );
+  if (exactMajorCity) {
+    return formatLocation(
+      exactMajorCity.name,
+      exactMajorCity.admin2 || exactMajorCity.admin1 || exactMajorCity.name,
+      exactMajorCity.admin1 || exactMajorCity.country || 'Global',
+      exactMajorCity.country || 'Global',
+      exactMajorCity.latitude,
+      exactMajorCity.longitude
+    );
+  }
+
+  // 1b. Exact name match in India if admin1 matches
+  const indiaExact = directResults.find(r => 
+    r.name.toLowerCase() === cleanQuery.toLowerCase() && 
+    ((r.country_code || '').toUpperCase() === 'IN' || (r.country || '').toLowerCase() === 'india') &&
+    (r.admin1 || '').toLowerCase() === cleanQuery.toLowerCase()
+  );
+  if (indiaExact) {
+    return formatLocation(
+      indiaExact.name,
+      indiaExact.admin2 || indiaExact.admin1 || indiaExact.name,
+      indiaExact.admin1 || indiaExact.country || 'India',
+      indiaExact.country || 'India',
+      indiaExact.latitude,
+      indiaExact.longitude
+    );
+  }
+
+  // Strategy 2: Administrative Division Search using Open-Meteo's '<location>, <admin1>' syntax
+  // Dynamically resolves states/provinces/districts (e.g. Tamil Nadu, Assam, Goa, Texas, Bavaria, Queensland)
+  const adminCandidates = ['Town', 'Main', 'North', 'Central', 'City', 'Station', 'Post', 'New', 'San', 'Fort'];
+  for (const prefix of adminCandidates) {
+    try {
+      const q = `${prefix}, ${cleanQuery}`;
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`;
+      const res = await fetchFn(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.results) && data.results.length > 0) {
+          const adminMatch = data.results.find(r => 
+            (r.admin1 && r.admin1.toLowerCase() === cleanQuery.toLowerCase()) ||
+            (r.country && r.country.toLowerCase() === cleanQuery.toLowerCase())
+          );
+          if (adminMatch) {
+            return formatLocation(
+              cleanQuery,
+              adminMatch.name,
+              adminMatch.admin1 || cleanQuery,
+              adminMatch.country || 'India',
+              adminMatch.latitude,
+              adminMatch.longitude
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[AERIS GEOCODING ERROR] Regional qualifier lookup failed for "${cleanQuery}":`, err.message);
+    }
+  }
+
+  // Strategy 3: Exact name match anywhere globally if not resolved as administrative division
+  const globalExact = directResults.find(r => r.name.toLowerCase() === cleanQuery.toLowerCase());
+  if (globalExact) {
+    return formatLocation(
+      globalExact.name,
+      globalExact.admin2 || globalExact.admin1 || globalExact.name,
+      globalExact.admin1 || globalExact.country || 'Global',
+      globalExact.country || 'Global',
+      globalExact.latitude,
+      globalExact.longitude
+    );
+  }
+
+  // Strategy 4: Multi-word query fallback: query distinctive first token (e.g. 'Arunachal Pradesh' -> 'Arunachal')
+  const words = cleanQuery.split(/\s+/);
+  if (words.length > 1) {
+    try {
+      const firstWord = words[0];
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(firstWord)}&count=5&language=en&format=json`;
+      const res = await fetchFn(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.results) && data.results.length > 0) {
+          const inMatch = data.results.find(r => (r.country_code || '').toUpperCase() === 'IN' || (r.country || '').toLowerCase() === 'india');
+          const target = inMatch || data.results[0];
+          return formatLocation(
+            cleanQuery,
+            target.name,
+            target.admin1 || cleanQuery,
+            target.country || 'India',
+            target.latitude,
+            target.longitude
+          );
+        }
+      }
+    } catch (err) {
+      console.error(`[AERIS GEOCODING ERROR] Multi-word token lookup failed for "${cleanQuery}":`, err.message);
+    }
+  }
+
+  // Strategy 5: Country Qualifier fallback (e.g. '<query>, India')
+  try {
+    const qIndia = `${cleanQuery}, India`;
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(qIndia)}&count=5&language=en&format=json`;
+    const res = await fetchFn(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.results) && data.results.length > 0) {
+        const target = data.results[0];
+        return formatLocation(
+          cleanQuery,
+          target.name,
+          target.admin1 || cleanQuery,
+          target.country || 'India',
+          target.latitude,
+          target.longitude
+        );
+      }
+    }
+  } catch (err) {
+    console.error(`[AERIS GEOCODING ERROR] Country qualifier lookup failed for "${cleanQuery}":`, err.message);
+  }
+
+  // Strategy 6: Single top result from direct search if available
+  if (directResults.length > 0) {
+    const top = directResults[0];
+    return formatLocation(
+      top.name,
+      top.admin2 || top.admin1 || top.name,
+      top.admin1 || top.country || 'Global',
+      top.country || 'Global',
+      top.latitude,
+      top.longitude
+    );
+  }
+
+  // No coordinates resolved
+  return null;
 }
 
 /**

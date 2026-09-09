@@ -36,11 +36,17 @@ export default function WeatherCard({ card, onFocusLocation }) {
       {/* 1. Header with Location & Audio Read-Aloud */}
       <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
             <h3 className="text-base sm:text-lg font-bold font-display text-white tracking-wide">
               {card.location}
             </h3>
+            {card.latitude != null && card.longitude != null && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-300/90 bg-cyan-950/60 border border-cyan-500/30 px-2 py-0.5 rounded-md shadow-sm">
+                <Compass className="w-3 h-3 text-cyan-400" />
+                {Math.abs(Number(card.latitude)).toFixed(4)}°{Number(card.latitude) >= 0 ? 'N' : 'S'}, {Math.abs(Number(card.longitude)).toFixed(4)}°{Number(card.longitude) >= 0 ? 'E' : 'W'}
+              </span>
+            )}
           </div>
           <p className="text-xs text-cyan-300/80 font-mono mt-0.5">
             Meteorological Intelligence Diagnostic
@@ -95,12 +101,25 @@ export default function WeatherCard({ card, onFocusLocation }) {
         </div>
 
         {/* Risk Level */}
-        <div className="bg-slate-900/60 p-3 rounded-2xl border border-amber-500/30">
+        <div 
+          className="bg-slate-900/60 p-3 rounded-2xl border transition-colors"
+          style={{ borderColor: card.riskColor ? `${card.riskColor}40` : 'rgba(245, 158, 11, 0.3)' }}
+        >
           <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
             <span className="text-[11px] font-mono">⚠ Risk Level</span>
           </div>
-          <div className="text-sm font-bold text-amber-400 font-mono">{card.riskLevel}</div>
-          <span className="text-[10px] text-amber-300/80">Convective Instability</span>
+          <div 
+            className="text-sm font-bold font-mono"
+            style={{ color: card.riskColor || '#f59e0b' }}
+          >
+            {card.riskLevel}
+          </div>
+          <span 
+            className="text-[10px] block truncate"
+            style={{ color: card.riskColor ? `${card.riskColor}cc` : 'rgba(245, 158, 11, 0.8)' }}
+          >
+            {card.riskLabel || (card.riskLevel === 'LOW RISK' ? 'Favorable Conditions' : card.riskLevel === 'SEVERE RISK' ? 'Severe Hazard' : card.riskLevel === 'HIGH RISK' ? 'Adverse Weather' : 'Caution Advised')}
+          </span>
         </div>
       </div>
 

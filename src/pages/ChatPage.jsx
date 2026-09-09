@@ -51,7 +51,7 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Main Natural-Language & Location-Aware Search Handler
+  // Main Natural-Language & Location-Aware Search Handler (Calls backend /api/chat)
   const handleSearch = async (text) => {
     if (!text.trim()) return;
 
@@ -65,58 +65,83 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     addMessageToChat(userMessage);
     setIsLoading(true);
-    setTelemetryStatus('Querying AERIS Backend Weather Gateway...');
-
-    // 1. Natural Language Geolocation Fallback Detection
-    const detectedGeo = extractLocationFromQuery(text);
+    setTelemetryStatus('Connecting to AERIS AI Chat Gateway & Open-Meteo Telemetry...');
 
     try {
-      // 2. Fetch real live weather telemetry from backend /api/weather
-      let liveWeatherData = null;
-      try {
-        liveWeatherData = await fetchLiveWeather(text);
-      } catch (err) {
-        console.warn('Backend live weather lookup failed:', err.message);
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: text,
+          persona: currentPersona.id,
+          conversationId: activeChat?.id
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success || data.error) {
+        const errorMessageText = data.error?.message || 'Failed to retrieve AI weather intelligence response.';
+        throw new Error(errorMessageText);
       }
 
-      if (liveWeatherData?.location) {
-        const { latitude, longitude, name, state } = liveWeatherData.location;
-        setFocusTarget({
-          lat: latitude,
-          lng: longitude,
-          zoom: 1.95,
-          name: `${name}, ${state}`
-        });
-        setTelemetryStatus(`Synchronized live telemetry for ${name}...`);
-      } else if (detectedGeo) {
-        setFocusTarget({
-          lat: detectedGeo.lat,
-          lng: detectedGeo.lng,
-          zoom: 1.95,
-          name: detectedGeo.name
-        });
-        setTelemetryStatus(`Focusing Earth on ${detectedGeo.name}...`);
-      }
+      const aiPayload = data.response;
 
-      const response = await generateWeatherIntelligenceResponse(text, currentPersona.id, liveWeatherData);
+      // Synchronize 3D Earth camera position with resolved location
+      if (aiPayload?.card?.latitude != null && aiPayload?.card?.longitude != null) {
+        setFocusTarget({
+          lat: Number(aiPayload.card.latitude),
+          lng: Number(aiPayload.card.longitude),
+          zoom: 1.95,
+          name: aiPayload.card.location
+        });
+        setTelemetryStatus(`Focused 3D Earth on ${aiPayload.card.location}...`);
+      } else if (aiPayload?.card?.location) {
+        try {
+          const liveGeo = await fetchLiveWeather(aiPayload.card.location);
+          if (liveGeo?.location) {
+            const { latitude, longitude, name, state } = liveGeo.location;
+            setFocusTarget({
+              lat: latitude,
+              lng: longitude,
+              zoom: 1.95,
+              name: `${name}, ${state}`
+            });
+            setTelemetryStatus(`Focused 3D Earth on ${name}, ${state}...`);
+          }
+        } catch (_) {
+          const detectedGeo = extractLocationFromQuery(text);
+          if (detectedGeo) {
+            setFocusTarget({
+              lat: detectedGeo.lat,
+              lng: detectedGeo.lng,
+              zoom: 1.95,
+              name: detectedGeo.name
+            });
+          }
+        }
+      }
 
       const botMessage = {
         id: `bot-${Date.now()}`,
         sender: 'aeris',
-        text: response.text,
-        card: response.card,
+        text: aiPayload.text,
+        card: aiPayload.card,
+        sources: aiPayload.sources,
         timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
       };
 
       setMessages((prev) => [...prev, botMessage]);
       addMessageToChat(botMessage);
     } catch (error) {
-      console.error('Error in weather intelligence query:', error);
+      console.error('Error in AI weather chat query:', error);
 
       const errorMessage = {
         id: `bot-err-${Date.now()}`,
         sender: 'aeris',
-        text: `⚠️ Weather Intelligence Error: Unable to retrieve weather data for "${text}". ${error.message || 'Please check the location name and try again.'}`,
+        text: `⚠️ Weather Intelligence Query Error: ${error.message || 'Unable to retrieve weather data. Please try again.'}`,
         timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
       };
       setMessages((prev) => [...prev, errorMessage]);
